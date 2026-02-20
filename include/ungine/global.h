@@ -21,8 +21,8 @@ protected:
 
 public:
 
-    /*----*/ global_t() noexcept : attr( new ATTR() ){}
-    virtual ~global_t() noexcept { /*--------------*/ }
+    global_t() noexcept : attr( new ATTR() ){}
+   ~global_t() noexcept { /*--------------*/ }
 
     /*─······································································─*/
 
@@ -40,6 +40,8 @@ public:
     void set_attribute( string_t name, T value ) const noexcept {
         attr->obj[ name ] = type::bind( value );
     }
+
+    void clear() const noexcept { attr->obj.clear(); }
 
     /*─······································································─*/
 

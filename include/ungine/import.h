@@ -14,10 +14,15 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
+#include <cfloat>
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #include <nodepp/nodepp.h>
 #include <nodepp/object.h>
 #include <nodepp/event.h>
 #include <nodepp/timer.h>
+#include <nodepp/file.h>
 #include <nodepp/path.h>
 #include <nodepp/fs.h>
 
@@ -37,6 +42,7 @@ namespace ungine { namespace rl {
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #include "struct.h"
+#include "utils.h"
 
 #include "global.h"
 #include "lock.h"
@@ -50,15 +56,17 @@ namespace ungine { namespace rl {
 #include "mesh.h"
 #include "gui.h"
 #include "vr.h"
+#include "render.h"
 #include "shader.h"
 
-#include "input.h"
+#include "kernel.h"
 #include "window.h"
 #include "engine.h"
+#include "input.h"
 
 #include "node.h"
+#include "shape.h"
 #include "camera.h"
-#include "render.h"
 #include "collision.h"
 
 #include "scene.h"

@@ -30,6 +30,8 @@ namespace ungine { namespace window {
 
     inline void set_opacity( float opacity )   { rl::SetWindowOpacity( opacity ); }
 
+    inline void resize( ivec2_t size )         { rl::SetWindowSize( size.x, size.y ); }
+
     inline void set_size( ivec2_t size )       { rl::SetWindowSize( size.x, size.y ); }
 
     inline void set_min_size( ivec2_t size )   { rl::SetWindowMinSize( size.x, size.y ); }
@@ -38,7 +40,16 @@ namespace ungine { namespace window {
 
     inline ivec2_t get_size() { return ivec2_t({ rl::GetRenderWidth(), rl::GetRenderHeight() }); }
 
-    inline vec2_t normalized( vec2_t pos ) { return pos * vec2_t({ rl::GetRenderWidth(), rl::GetRenderHeight() }); }
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace window {
+    
+    inline vec2_t normalized( vec2_t pos ) { return pos * vec2_t({ 
+        type::cast<float>( rl::GetRenderWidth () ), 
+        type::cast<float>( rl::GetRenderHeight() ) 
+    }); }
 
 }}
 
@@ -84,15 +95,15 @@ namespace ungine { namespace window {
 
     inline bool is_focused()     { return rl::IsWindowFocused(); }
 
-    inline bool is_hidden()      { return mode::check( FLAGS::WINDOW_HIDDEN ); }
+    inline bool is_hidden()      { return mode::check( FLAGS::WINDOW_FLAG_HIDDEN ); }
 
-    inline bool is_maximized()   { return mode::check( FLAGS::WINDOW_MAXIMIZED ); }
+    inline bool is_maximized()   { return mode::check( FLAGS::WINDOW_FLAG_MAXIMIZED ); }
 
-    inline bool is_minimized()   { return mode::check( FLAGS::WINDOW_MINIMIZED ); }
+    inline bool is_minimized()   { return mode::check( FLAGS::WINDOW_FLAG_MINIMIZED ); }
 
-    inline bool is_fullscreen()  { return mode::check( FLAGS::WINDOW_FULLSCREEN ); }
+    inline bool is_fullscreen()  { return mode::check( FLAGS::WINDOW_FLAG_FULLSCREEN ); }
 
-    inline bool is_undecorated() { return mode::check( FLAGS::WINDOW_UNDECORATED ); }
+    inline bool is_undecorated() { return mode::check( FLAGS::WINDOW_FLAG_UNDECORATED ); }
 
 }}
 

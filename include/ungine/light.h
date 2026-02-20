@@ -9,30 +9,16 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef UNGINE_LOCKER
-#define UNGINE_LOCKER
+#ifndef UNGINE_LIGHT
+#define UNGINE_LIGHT
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class lock_t : public global_t {
-protected:
+namespace ungine { namespace light {
 
-    struct NODE { atomic_t<int> value = 0; }; ptr_t<NODE> obj;
 
-public:
-
-    lock_t() noexcept : global_t(), obj( new NODE() ){}
-   ~lock_t() noexcept { /*--------------*/ }
-
-    void      lock() const noexcept { ++obj->value; }
-    void    unlock() const noexcept { --obj->value; }
-
-    bool is_locked() const noexcept { return obj->value.get() != 0; }
-
-};}
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
-
-/*────────────────────────────────────────────────────────────────────────────*/

@@ -4,10 +4,6 @@
 
 namespace ungine { namespace math { namespace quaternion {
 
-    vec4_t from_vec3_vec3( vec3_t from, vec3_t to ) {
-        return rl::QuaternionFromVector3ToVector3( from, to );
-    }
-
     vec4_t from_axis( type::pair<vec3_t,float> input ) {
         return rl::QuaternionFromAxisAngle( 
             input.first, input.second 
@@ -39,6 +35,11 @@ namespace ungine { namespace math { namespace quaternion {
         return out;
     }
 
+    //FIXME: Look_at;
+    vec4_t look_at( vec3_t a, vec3_t b, vec3_t up ) {
+        return from_matrix( rl::MatrixLookAt( a, b, up ) );
+    }
+
 }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
@@ -51,6 +52,18 @@ namespace ungine { namespace math { namespace vec3 {
 
     vec3_t rotation( vec3_t origin, vec4_t quaternion ) {
         return rl::Vector3RotateByQuaternion( origin, quaternion );
+    }
+
+    vec3_t rotation( vec3_t origin, mat_t matrix ) {
+        return rl::Vector3RotateByQuaternion( origin, 
+               quaternion::from_matrix( matrix )
+        );
+    }
+
+    vec3_t rotation( vec3_t origin, vec3_t euler ) {
+        return rl::Vector3RotateByQuaternion( origin, 
+               quaternion::from_euler( euler )
+        );
     }
 
 }}}
@@ -82,6 +95,32 @@ namespace ungine { namespace math {
     vec3_t normalize( vec3_t value ){ return rl::Vector3Normalize( value ); }
 
     vec2_t normalize( vec2_t value ){ return rl::Vector2Normalize( value ); }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace math {
+
+    float length( vec4_t value ){ return rl::Vector4Length( value ); }
+
+    float length( vec3_t value ){ return rl::Vector3Length( value ); }
+
+    float length( vec2_t value ){ return rl::Vector2Length( value ); }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace math {
+
+    vec4_t invert( vec4_t value ){ return rl::Vector4Invert( value ); }
+
+    vec3_t invert( vec3_t value ){ return rl::Vector3Invert( value ); }
+
+    vec2_t invert( vec2_t value ){ return rl::Vector2Invert( value ); }
+
+    float  invert( float  value ){ return -value; }
 
 }}
 
@@ -143,11 +182,6 @@ namespace ungine { namespace math { namespace quaternion {
 
 namespace ungine { namespace math { namespace matrix {
 
-    mat_t from_vec3_vec3( vec3_t from, vec3_t to ) {
-        vec4_t out = math::quaternion::from_vec3_vec3( from, to );
-        return /*-*/ math::quaternion::to_matrix( out );
-    }
-
     mat_t from_axis( type::pair<vec3_t,float> input ) {
         vec4_t out = math::quaternion::from_axis( input );
         return /*-*/ math::quaternion::to_matrix( out );
@@ -176,16 +210,15 @@ namespace ungine { namespace math { namespace matrix {
         return /*-*/ math::quaternion::to_axis    ( out );
     }
 
+    mat_t look_at( vec3_t a, vec3_t b, vec3_t up ) {
+        return rl::MatrixLookAt( a, b, up );
+    }
+
 }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace math { namespace euler {
-
-    vec3_t from_vec3_vec3( vec3_t from, vec3_t to ) {
-        vec4_t out = math::quaternion::from_vec3_vec3( from, to );
-        return /*-*/ math::quaternion::to_euler( out );
-    }
 
     vec3_t from_axis( type::pair<vec3_t,float> input ) {
         vec4_t out = math::quaternion::from_axis( input );
@@ -215,6 +248,12 @@ namespace ungine { namespace math { namespace euler {
         return /*-*/ math::quaternion::to_axis   ( out );
     }
 
+
+
+    vec3_t look_at( vec3_t a, vec3_t b, vec3_t up ) {
+        return from_matrix( rl::MatrixLookAt( a, b, up ) );
+    }
+
 }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
@@ -242,6 +281,28 @@ namespace ungine { namespace math {
     float normalize( float value, float min, float max ){
            value = rl::Normalize( value, min, max );
     return value; }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace math {
+
+    float distance( vec4_t a, vec4_t b ){
+        return rl::Vector4Distance( a, b );
+    }
+
+    float distance( vec3_t a, vec3_t b ){
+        return rl::Vector3Distance( a, b );
+    }
+
+    float distance( vec2_t a, vec2_t b ){
+        return rl::Vector2Distance( a, b );
+    }
+
+    float distance( float a, float b ){
+        return fabsf( a - b );
+    }
 
 }}
 

@@ -27,28 +27,27 @@ public:
 
     /*─······································································─*/
 
-    virtual ~vr_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+   ~vr_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+    vr_t() noexcept : global_t(), obj( new NODE() ) /*----*/ {
 
-    /*----*/ vr_t() noexcept : global_t(), obj( new NODE() ){
+        obj->device.vResolution             = rl::GetScreenHeight(); // Vertical   resolution in pixels
+        obj->device.hResolution             = rl::GetScreenWidth();  // Horizontal resolution in pixels
+        obj->device.hScreenSize             = 0.14f;                 // Horizontal size in meters
+        obj->device.vScreenSize             = 0.07f;                 // Vertical   size in meters
 
-        obj->device.hResolution             = 2160;      // Horizontal resolution in pixels
-        obj->device.vResolution             = 1200;      // Vertical resolution in pixels
-        obj->device.hScreenSize             = 0.133793f; // Horizontal size in meters
-        obj->device.vScreenSize             = 0.0669f;   // Vertical size in meters
+        obj->device.chromaAbCorrection[0]   = 0.99f;                 // Chromatic aberration correction parameter 0
+        obj->device.chromaAbCorrection[1]   =-0.01f;                 // Chromatic aberration correction parameter 1
+        obj->device.chromaAbCorrection[2]   = 1.02f;                 // Chromatic aberration correction parameter 2
+        obj->device.chromaAbCorrection[3]   = 0.00f;                 // Chromatic aberration correction parameter 3
 
-        obj->device.eyeToScreenDistance     = 0.041f;     // Distance between eye and display in meters
-        obj->device.lensSeparationDistance  = 0.07f;      // Lens separation distance in meters
-        obj->device.interpupillaryDistance  = 0.07f;      // IPD (distance between pupils) in meters
+        obj->device.eyeToScreenDistance     = 0.07f;                 // Distance between eye and display in meters
+        obj->device.interpupillaryDistance  = 0.04f;                 // IPD (distance between pupils) in meters
+        obj->device.lensSeparationDistance  = 0.04f;                 // Lens separation distance in meters
 
-        obj->device.lensDistortionValues[0] = 1.0f;       // Lens distortion constant parameter 0
-        obj->device.lensDistortionValues[1] = 0.22f;      // Lens distortion constant parameter 1
-        obj->device.lensDistortionValues[2] = 0.24f;      // Lens distortion constant parameter 2
-        obj->device.lensDistortionValues[3] = 0.0f;       // Lens distortion constant parameter 3
-
-        obj->device.chromaAbCorrection[0]   = 0.996f;      // Chromatic aberration correction parameter 0
-        obj->device.chromaAbCorrection[1]   = -0.004f;     // Chromatic aberration correction parameter 1
-        obj->device.chromaAbCorrection[2]   = 1.014f;      // Chromatic aberration correction parameter 2
-        obj->device.chromaAbCorrection[3]   = 0.0f;        // Chromatic aberration correction parameter 3
+        obj->device.lensDistortionValues[0] = 1.00f;                 // Lens distortion constant parameter 0
+        obj->device.lensDistortionValues[1] = 0.22f;                 // Lens distortion constant parameter 1
+        obj->device.lensDistortionValues[2] = 0.24f;                 // Lens distortion constant parameter 2
+        obj->device.lensDistortionValues[3] = 0.00f;                 // Lens distortion constant parameter 3
 
     update_device(); }
 

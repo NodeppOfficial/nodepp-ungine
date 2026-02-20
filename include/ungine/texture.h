@@ -17,12 +17,12 @@
 namespace ungine { class texture_t : public global_t {
 protected:
 
-    struct NODE { rl::Texture2D txt; }; ptr_t<NODE> obj;
+    struct NODE { rl::Texture2D txt; char filter=-1; }; ptr_t<NODE> obj;
 
 public:
 
-    /*----*/ texture_t() noexcept : global_t(), obj( new NODE() ){ /*---*/ }
-    virtual ~texture_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+    texture_t() noexcept : global_t(), obj( new NODE() ){ /*---*/ }
+   ~texture_t() noexcept { if( obj.count()>1 ){ return; } free(); }
 
     /*─······································································─*/
 
@@ -33,73 +33,87 @@ public:
         auto data = stream::await( file ); /*--------------------------------------------*/
         auto img  = rl::LoadImageFromMemory( ext.get(), (uchar*) data.get(), data.size() );
         obj->txt  = rl::LoadTextureFromImage( img ); rl::UnloadImage( img );
+        set_filter( rl::TEXTURE_FILTER_BILINEAR );
     }
 
     texture_t( rl::Image image ) noexcept : global_t(), obj( new NODE() ) {
         obj->txt = rl::LoadTextureFromImage( image );
+        set_filter( rl::TEXTURE_FILTER_BILINEAR );
     }
 
     texture_t( string_t path ) noexcept : global_t(), obj( new NODE() ) {
         obj->txt = rl::LoadTexture( path.get() );
+        set_filter( rl::TEXTURE_FILTER_BILINEAR );
     }
+
 
     /*─······································································─*/
 
     rl::Vector2 size() const noexcept {
         if( !is_valid() ){ return rl::Vector2({ 0, 0 }); }
-        /*--------------*/ return { obj->txt.width, obj->txt.height };
+        /*--------------*/ return { 
+            type::cast<float>( obj->txt.width  ), 
+            type::cast<float>( obj->txt.height )
+        };
     }
 
     void set_filter( uint filter ) const noexcept {
-        rl::SetTextureFilter( obj->txt, filter );
+         if( obj->filter==filter ){ return; }
+         rl::SetTextureFilter( obj->txt, filter );
+         obj->filter = filter;
     }
 
     /*─······································································─*/
-
-    bool is_valid() const noexcept { return rl::IsTextureValid( obj->txt ); }
 
     rl::Texture* operator->() const noexcept { return &get(); }
 
     rl::Texture& get() const noexcept { return obj->txt; }
 
+    bool is_valid() const noexcept { 
+        if( obj->txt.width == 0 ){ return false; }
+        return rl::IsTextureValid( obj->txt ); 
+    }
+
     /*─······································································─*/
 
     void draw( transform_2D_t pos, rect_t src ) const noexcept {
-        rl::DrawTexturePro( obj->txt, src, rect_t({
+        auto origin = pos.translate.scale / 2; rl::DrawTexturePro( obj->txt, src, rect_t({
                 pos.translate.position.x, pos.translate.position.y,
                 pos.translate.scale.x,    pos.translate.scale.y
-            }), vec2_t({0,0}), pos.translate.rotation * RAD2DEG, rl::WHITE 
+            }), origin, pos.translate.rotation * RAD2DEG, rl::WHITE 
         );
     }
 
     void draw( transform_2D_t pos ) const noexcept {
-        rl::DrawTexturePro( obj->txt, rect_t({
-                0, 0, obj->txt.width, 
-                /*-*/ obj->txt.height
+        auto origin = pos.translate.scale / 2; rl::DrawTexturePro( obj->txt, rect_t({
+                0, 0, type::cast<float>( obj->txt.width  ), 
+                /*-*/ type::cast<float>( obj->txt.height )
             }), rect_t({
                 pos.translate.position.x, pos.translate.position.y,
                 pos.translate.scale.x,    pos.translate.scale.y
-            }), vec2_t({0,0}), pos.translate.rotation * RAD2DEG, rl::WHITE 
+            }), origin, pos.translate.rotation * RAD2DEG, rl::WHITE 
         );
     }
 
     /*─······································································─*/
 
     void draw( rect_t pos, rect_t src, float angle=0 ) const noexcept {
+        auto origin = vec2_t({ pos.width, pos.height }) / 2; 
         rl::DrawTexturePro( obj->txt, src, rect_t({
                 pos.x, pos.y, pos.width, pos.height
-            }), vec2_t({0,0}), angle*RAD2DEG, rl::WHITE 
+            }), origin, angle*RAD2DEG, rl::WHITE 
         );
     }
 
     void draw( rect_t pos, float angle=0 ) const noexcept {
+        auto origin = vec2_t({ pos.width, pos.height }) / 2;
         rl::DrawTexturePro( obj->txt, rect_t({
-                0, 0, obj->txt.width, 
-                /*-*/ obj->txt.height
+                0, 0, type::cast<float>( obj->txt.width  ), 
+                /*-*/ type::cast<float>( obj->txt.height )
             }), rect_t({
                 pos.x    , pos.y,
                 pos.width, pos.height
-            }), vec2_t({0,0}), angle*RAD2DEG, rl::WHITE 
+            }), origin, angle*RAD2DEG, rl::WHITE 
         );
     }
 

@@ -14,14 +14,15 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t camera_3D( function_t<void,ref_t<node_t>> clb ){
+namespace ungine { namespace node { node_t node_camera_3D( function_t<void,ref_t<node_t>> clb ){
 return node_3D([=]( ref_t<node_t> self ){
 
     camera_3D_t camera;
     /*-------*/ camera.fovy       = 90.0f;
-    /*-------*/ camera.projection = camera::VIEW::PROJECTION_PERSPECTIVE;
+    /*-------*/ camera.projection = camera::VIEW::PROJECTION_VIEW_PERSPECTIVE;
 
     self->set_attribute( "camera", camera );
+
     auto view = self->get_viewport(); if( view==nullptr ) { return; }
 
     if( view->camera3D.null() ){
@@ -47,8 +48,8 @@ clb( self ); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t fly_camera_3D( function_t<void,ref_t<node_t>> clb ){
-return camera_3D([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_fly_camera_3D( function_t<void,ref_t<node_t>> clb ){
+return node_camera_3D([=]( ref_t<node_t> self ){
 
     auto cam = self->get_attribute<camera_3D_t>   ( "camera" );
     auto pos = self->get_attribute<transform_3D_t>( "transform" );
@@ -73,8 +74,9 @@ return camera_3D([=]( ref_t<node_t> self ){
     self->onLoop([=]( float delta ){
     if( !ungine::cursor::is_hidden() ){ return; }
 
-        auto data /**/ = ungine::mouse::get_delta();
-        pos->rotation += vec3_t({data.y,-data.x,0.f}) * delta * .5f;
+        auto data /*-*/ = ungine::mouse::get_delta();
+        pos->rotation  += vec3_t({data.y,-data.x,0.f}) * delta * .5f;
+        pos->rotation.x = clamp( pos->rotation.x, -PI/2, PI/2 );
 
         pos->position += math::vec3::rotation( *vec, 
         /*------------*/ math::quaternion::from_euler( pos->rotation ) 
@@ -86,7 +88,7 @@ clb( self ); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t camera_2D( function_t<void,ref_t<node_t>> clb ){
+namespace ungine { namespace node { node_t node_camera_2D( function_t<void,ref_t<node_t>> clb ){
 return node_2D([=]( ref_t<node_t> self ){
 
     camera_2D_t camera;
@@ -114,8 +116,8 @@ clb( self ); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t fly_camera_2D( function_t<void,ref_t<node_t>> clb ){
-return camera_2D([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_fly_camera_2D( function_t<void,ref_t<node_t>> clb ){
+return node_camera_2D([=]( ref_t<node_t> self ){
 
     auto cam = self->get_attribute<camera_2D_t>   ( "camera" );
     auto pos = self->get_attribute<transform_2D_t>( "transform" );

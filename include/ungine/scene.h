@@ -14,234 +14,179 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { 
-node_t node_render( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
+namespace ungine { namespace render {
 
-    self->set_attribute( "viewport", viewport_t() );
-    self->set_attribute( "type"    , "Render" );
+    void emit_scissor( rect_t scissor, function_t<void> callback ) {
+         rl::BeginScissorMode( scissor.x, scissor.y, scissor.width, scissor.height );
+         callback(); rl::EndScissorMode(); /*-------------------------------------*/
+    }
 
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
+    void emit_render( render_2D_t render, function_t<void> callback ) {
+         rl::BeginTextureMode( render ); callback();
+         rl::EndTextureMode  (); /*---------------*/
+    }
 
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() );
-             
-        auto que = self->get_render_queue();
+    void emit_shader( const shader_t* shader, function_t<void> callback ) {
+         if( shader == nullptr || !shader->is_valid() ){ return; }
+         rl::BeginShaderMode( shader->get() ); 
+         shader->next(); callback();
+         rl::EndShaderMode();
+    }
 
-    render::emit_render( &vpt->render, [&](){
-        rl::ClearBackground( vpt->background );
+    void emit_blend( uint blend_mode, function_t<void> callback ) {
+         rl::BeginBlendMode( blend_mode ); callback();
+         rl::EndBlendMode  (); /*-------------------*/
+    }
 
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
+    void emit_2D( camera_2D_t* cam, function_t<void> callback ) {
+         if( cam == nullptr ){ return; }
+         rl::BeginMode2D( *cam ); callback();
+         rl::EndMode2D  (); /*-------------*/
+    }
 
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+    void emit_3D( camera_3D_t* cam, function_t<void> callback ) {
+         if( cam == nullptr ){ return; }
+         rl::BeginMode3D( *cam ); callback();
+         rl::EndMode3D  (); /*-------------*/
+    }
 
-        }); }}
+    void emit_vr( vr_t* device, function_t<void> callback ) {
+         if( device == nullptr /*--------------*/ ){ return; }
+         rl::BeginVrStereoMode( device->device() ); callback();
+         rl::EndVrStereoMode  (); /*-------------------------*/
+    }
 
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
+    void emit( function_t<void> callback ) {
+         rl::BeginDrawing(); callback();
+         rl::EndDrawing  (); /*-------*/
+    }
 
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); }}
-        
-        if( !que->eventUI.empty() ){
-
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }
-
-    }); });
-
-clb( self ); }); }}}
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace node { 
-node_t node_vr_render( function_t<void,ref_t<node_t>> clb ) {
+node_t node_render( function_t<void,ref_t<node_t>> clb ) {
 return node_t([=]( ref_t<node_t> self ){
 
-    self->set_attribute( "viewport", viewport_t() );
+    auto rnd   = type::bind( render_t() ); 
+    auto tmp   = viewport_t();
+    tmp.render = type::bind( rnd );
+
     self->set_attribute( "type"    , "Render" );
     self->set_attribute( "vr"      , vr_t() );
+    self->set_attribute( "viewport", tmp );
+    
+    self->onDraw([=](){
 
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
-
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
         auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() ); 
-             
-        auto vr  = self->get_attribute<vr_t>( "vr" );
+        auto vrr = self->get_attribute<vr_t>( "vr" );
         auto que = self->get_render_queue();
 
-    render::emit_render( &vpt->render, [&](){ vr->emit([&](){
-        rl::ClearBackground( vpt->background );
+    render::emit_render( vpt->render->get(), [&](){
 
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
+        if( vpt->mode & visibility::MODE::VISIBILITY_MODE_VR && vrr != nullptr
+        ) { rl::BeginVrStereoMode( vrr->device() ); }
+            rl::ClearBackground( vpt->background );
 
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+            if( !que->event3D.empty() && !vpt->camera3D.null() ){
+            render::emit_3D( &vpt->camera3D, [&](){
 
-        }); }}
+                auto x=que->event3D.first(); while( x!=nullptr ){
+                auto y=x->next; x->data.emit(); x=y; }
 
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
+            }); }
 
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+            if( !que->event2D.empty() && !vpt->camera2D.null() ){
+            render::emit_2D( &vpt->camera2D, [&](){
 
-        }); }}
-        
-        if( !que->eventUI.empty() ){
+                auto x=que->event2D.first(); while( x!=nullptr ){
+                auto y=x->next; x->data.emit(); x=y; }
 
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+            }); } else {
 
-        }
+                auto x=que->event2D.first(); while( x!=nullptr ){
+                auto y=x->next; x->data.emit(); x=y; }
 
-    }); }); });
+            }
+            
+            if( !que->eventUI.empty() ){
 
-clb( self ); }); }}}
+                auto x=que->eventUI.first(); while( x!=nullptr ){
+                auto y=x->next; x->data.emit(); x=y; }
+
+            }
+
+        if( vrr != nullptr && ( vpt->mode & visibility::MODE::VISIBILITY_MODE_VR ) 
+        ) { rl::EndVrStereoMode(); } 
+
+    }); }); clb( self ); 
+
+}); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace node {
 node_t node_scene( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
+return node_render([=]( ref_t<node_t> self ){
 
-    self->set_attribute( "viewport", viewport_t() );
-    self->set_attribute( "type"    , "Render" );
+    shader_t shader;
+             shader.set_fragment_shader( kernel::cv_default_kernel() );         
+    if( shader.compile()==-1 ) /**/ { throw except_t( "error shader" ); }
 
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
+    self->onNext([=](){ auto root = self->get_root();
 
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() ); 
-             
-        auto que = self->get_render_queue();
+        queue_t<node_t*> collision_list;
 
-    render::emit_render( &vpt->render, [&](){
-        rl::ClearBackground( vpt->background );
+        root->child_iterator([=]( node_t* node ){
 
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
+            if( !node->has_attribute( "visibility" ) ){ return true; }
+            auto vis = node->get_attribute<visibility_t>("visibility");
+            if ( vis->mode==0x00 || vis->mask==0x00 ){ return false; }
+            if ( !node->has_attribute("collision")  ){ return true ; }
 
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+            /*---------------------------*/ collision_list.push( node );
+        return true; }, true ); auto data = collision_list.data();
 
-        }); }}
-
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); } else {
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }}
+        for( auto x:data ) { for( auto y:data ) {
+        if ( x == y ) /*----------*/ { continue; }
+        if ( x->onCollision.empty() ){ continue; }
+        collision::next( *x,*y ); }}
         
-        if( !que->eventUI.empty() ){ 
-
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }
-
     });
 
-    render::emit( [&](){ if( rnd.null() ){ return; }
-        
-        auto txt = rnd->get().texture; 
+    self->onDraw([=](){
 
-        auto src = rect_t({ 0, 0, txt.width,-txt.height });
-        auto dst = rect_t({ 0, 0, txt.width, txt.height });
-
-        rl::DrawTexturePro ( txt, src, dst, vec2_t({ 0, 0 }), .0f, rl::WHITE );
-
-    }); });
-
-clb( self ); }); }}}
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-namespace ungine { namespace node {
-node_t node_vr_scene( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
-
-    self->set_attribute( "viewport", viewport_t() );
-    self->set_attribute( "type"    , "Render" );
-    self->set_attribute( "vr"      , vr_t() );
-
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
-
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
         auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() ); 
-             
-        auto vr  = self->get_attribute<vr_t>( "vr" );
-        auto que = self->get_render_queue();
+        auto shd = self->get_attribute<shader_t>( "shader" );
+        auto vrr = self->get_attribute<vr_t>    ( "vr" );
+        auto bvr =( vpt->mode&visibility::MODE::VISIBILITY_MODE_VR ) ? true : false;
 
-    render::emit_render( &vpt->render, [&](){ vr->emit([&](){
-        rl::ClearBackground( vpt->background );
+    if( shd != nullptr && shd->is_valid() ){ 
+        shd->append_uniform( "screen", vpt->render->get_texture() ); 
+        shd->append_uniform( "depth" , vpt->render->get_depth  () ); 
+        shd->append_uniform( "vrMode", (int) bvr );
+    }
 
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
+    render::emit([&](){ 
 
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+        if( vpt->render.null() )/**/{ return; }
+        if( shd != nullptr && shd->is_valid() )
+          { rl::BeginShaderMode( shd->get() ); shd->next(); }
+            
+            auto txt = vpt->render->get_texture(); rl::ClearBackground( rl::BLANK );
+            auto src = rect_t({ 0, 0, type::cast<float>( txt.width ), type::cast<float>(-txt.height ) });
+            auto dst = rect_t({ 0, 0, type::cast<float>( txt.width ), type::cast<float>( txt.height ) });
 
-        }); }}
+            rl::DrawTexturePro ( txt, src, dst, vec2_t({ 0, 0 }), .0f, rl::WHITE );
 
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
+        if( shd != nullptr && shd->is_valid() ){ rl::EndShaderMode(); } 
 
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); } else {
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-        }}
-        
-        if( !que->eventUI.empty() ){ 
-
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }
-
-    });});
-
-    render::emit( [&](){ if( rnd.null() ){ return; }
-        
-        auto txt = rnd->get().texture; 
-
-        auto src = rect_t({ 0, 0, txt.width,-txt.height });
-        auto dst = rect_t({ 0, 0, txt.width, txt.height });
-
-        rl::DrawTexturePro ( txt, src, dst, vec2_t({ 0, 0 }), .0f, rl::WHITE );
-
-    }); });
-
-clb( self ); }); }}}
+    }); }); 
+    
+    self->set_attribute( "shader", shader ); clb( self );
+ 
+}); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
