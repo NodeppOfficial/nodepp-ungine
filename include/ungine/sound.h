@@ -14,154 +14,197 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { struct sound_t {
-protected:
+namespace ungine { namespace sound {
 
-    struct NODE { rl::Sound ctx; }; ptr_t<NODE> obj;
+    sound_t load( string_t path ) { return rl::LoadSound( path.get() ); }
 
-public:
+    /*─······································································─*/
 
     template< class T >
-    sound_t( T& file, string_t ext ) noexcept : obj( new NODE() ){
-        auto raw = stream::await( file ); /*-------------------------------*/
-        auto wav = rl::LoadWaveFromMemory( ext.get(), raw.get(), raw.size() );
-        obj->ctx = rl::LoadSoundFromWave( wav ); rl::UnloadWave( wav );
+    sound_t load( const T& stream, string_t ext ) { do {
+
+        auto data = stream::await(stream);
+        if( !data.has_value() ){ break; }
+
+        auto wave = rl::LoadWaveFromMemory( 
+            ext.get(), 
+            (uchar) data.value().get(), 
+            /*---*/ data.value .size() 
+        );
+
+        auto snd = rl::LoadSoundFromWave( wave );
+        rl::UnloadWave( wave ); return snd;
+
+    } while(0); return {}; }
+
+    /*─······································································─*/
+
+    bool is_valid( sound_t& sound ) { 
+         if( sound.frameCount==0 ){ return false; }
+         return rl::IsSoundValid( sound ); 
     }
 
-    sound_t( rl::Sound ctx ) noexcept : obj( new NODE() ) { obj->ctx = ctx; }
-
-    sound_t( string_t path ) noexcept : obj( new NODE() ) {
-        obj->ctx = rl::LoadSound( path.get() );
-    }
-
-    sound_t() noexcept : obj( new NODE() ) {}
-   ~sound_t() noexcept { if( obj.count()>1 ){ return; } free(); }
-
-    /*─······································································─*/
-
-    void set_volume( float val ) const noexcept { rl::SetSoundVolume( obj->ctx, val ); }
-
-    void set_pitch( float val ) const noexcept { rl::SetSoundPitch( obj->ctx, val ); }
-
-    void set_pan( float val ) const noexcept { rl::SetSoundPan( obj->ctx, val ); }
-
-    /*─······································································─*/
-
-    bool is_playing() const noexcept { return rl::IsSoundPlaying( obj->ctx ); }
-
-    /*─······································································─*/
-
-    void play  () const noexcept { rl::PlaySound  ( obj->ctx ); }
-
-    void pause () const noexcept { rl::PauseSound ( obj->ctx ); }
-
-    void stop  () const noexcept { rl::StopSound  ( obj->ctx ); }
-
-    void resume() const noexcept { rl::ResumeSound( obj->ctx ); }
-
-    /*─······································································─*/
-
-    rl::Sound* operator->() const noexcept { return &get(); }
-
-    rl::Sound& get() const noexcept { return obj->ctx; }
-
-    bool is_valid() const noexcept { 
-        if( obj->ctx.frameCount == 0 ){ return false; }
-        return rl::IsSoundValid( obj->ctx ); 
+    bool is_playing( sound_t& sound ) {
+         if( !is_valid( sound ) ){ return false; }
+         return rl::IsSoundPlaying( sound ); 
     }
 
     /*─······································································─*/
 
-    void free() const noexcept {
-         if( !is_valid() ){ return; } rl::UnloadSound( obj->ctx );
+    int set_volume( sound_t& sound, float val ) { 
+        if( !is_valid( sound ) ) /*--*/ { return -1; }
+        rl::SetSoundVolume( sound, val ); return  1; 
     }
 
-}; }
+    int set_pitch( sound_t& sound, float val ) { 
+        if( !is_valid( sound ) ) /*-*/ { return -1; }
+        rl::SetSoundPitch( sound, val ); return  1; 
+    }
+
+    int set_pan( sound_t& sound, float val ) { 
+        if( !is_valid( sound ) )/*-*/{ return -1; }
+        rl::SetSoundPan( sound, val ); return  1; 
+    }
+
+    /*─······································································─*/
+
+    int play( sound_t& sound ) { 
+        if( !is_valid( sound ) ){ return -1; }
+        rl::PlaySound( sound );   return  1;
+    }
+
+    int pause( sound_t& sound ) { 
+        if( !is_valid( sound ) ){ return -1; }
+        rl::PauseSound( sound );  return  1;
+    }
+
+    int stop( sound_t& sound ) { 
+        if( !is_valid( sound ) ){ return -1; }
+        rl::StopSound( sound );   return  1;
+    }
+
+    int resume( sound_t& sound ) { 
+        if( !is_valid( sound ) ){ return -1; }
+        rl::ResumeSound( sound ); return  1;
+    }
+
+    /*─······································································─*/
+
+    int unload( sound_t& sound ){ 
+        if( !is_valid( sound ) ){ return -1; }
+        rl::UnloadSound( sound ); return  1; 
+    }
+
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class music_t {
-protected:
+namespace ungine { namespace music {
 
-    struct NODE { rl::Music ctx; bool shot=false; }; ptr_t<NODE> obj;
+    music_t load( string_t path ) { return rl::LoadMusicStream( path.get() ); }
 
-public:
+    /*─······································································─*/
 
     template< class T >
-    music_t( T& file, string_t ext ) noexcept : obj( new NODE() ){
-        auto data = stream::await( file ); /*----------------------------------------*/
-        obj->ctx  = rl::LoadMusicStreamFromMemory( ext.get(), data.get(), data.size() );
+    music_t load( const T& stream, string_t ext ) { do {
+
+        auto data = stream::await(stream);
+        if( !data.has_value() ){ break; }
+
+        return rl::LoadMusicStreamFromMemory( 
+            ext.get(), 
+            (uchar) data.value().get(), 
+            /*---*/ data.value .size() 
+        );
+
+    } while(0); return {}; }
+
+    /*─······································································─*/
+
+    bool is_valid( const music_t& music ) { 
+         if( music.frameCount==0 ){ return false; }
+         return rl::IsMusicValid( music ); 
     }
 
-    music_t( rl::Music ctx ) noexcept : obj( new NODE() ) { obj->ctx = ctx; }
-
-    music_t( string_t path ) noexcept : obj( new NODE() ) {
-        obj->ctx = rl::LoadMusicStream( path.get() );
+    bool is_playing( const music_t& music ) {
+         if( !is_valid( music ) ){ return false; }
+         return rl::IsMusicStreamPlaying( music ); 
     }
 
-    music_t() noexcept : obj( new NODE() ) {}
-   ~music_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+    /*─······································································─*/
+
+    int set_volume( const music_t& music, float val ) { 
+        if( !is_valid( music ) ) /*--*/ { return -1; }
+        rl::SetMusicVolume( music, val ); return  1; 
+    }
+
+    int set_pitch( const music_t& music, float val ) { 
+        if( !is_valid( music ) ) /*-*/ { return -1; }
+        rl::SetMusicPitch( music, val ); return  1; 
+    }
+
+    int set_pan( const music_t& music, float val ) { 
+        if( !is_valid( music ) )/*-*/{ return -1; }
+        rl::SetMusicPan( music, val ); return  1; 
+    }
 
     /*─······································································─*/
 
-    void set_volume( float val ) const noexcept { rl::SetMusicVolume( obj->ctx, val ); }
+    int play( const music_t& music ) { 
+        if( !is_valid( music ) )/**/{ return -1; }
+        rl::PlayMusicStream( music ); return  1;
+    }
 
-    void set_pitch( float val ) const noexcept { rl::SetMusicPitch( obj->ctx, val ); }
+    int pause( const music_t& music ) { 
+        if( !is_valid( music ) )/*-*/{ return -1; }
+        rl::PauseMusicStream( music ); return  1;
+    }
 
-    void set_pan( float val ) const noexcept { rl::SetMusicPan( obj->ctx, val ); }
+    int stop( const music_t& music ) { 
+        if( !is_valid( music ) )/**/{ return -1; }
+        rl::StopMusicStream( music ); return  1;
+    }
+
+    int resume( const music_t& music ) { 
+        if( !is_valid( music ) )/*--*/{ return -1; }
+        rl::ResumeMusicStream( music ); return  1;
+    }
+
+    int update( const music_t& music ) { 
+        if( !is_valid( music ) )/*--*/{ return -1; }
+        rl::UpdateMusicStream( music ); return  1;
+    }
 
     /*─······································································─*/
-
-    bool is_playing() const noexcept { return rl::IsMusicStreamPlaying( obj->ctx ); }
-
-    /*─······································································─*/
-
-    void  set ( float pos ) const noexcept { rl::SeekMusicStream( obj->ctx, pos ); }
-
-    float size() const noexcept { return rl::GetMusicTimeLength( obj->ctx ); }
     
-    float seek() const noexcept { return rl::GetMusicTimePlayed( obj->ctx ); }
+    float seek( const music_t& music ) { 
+        return rl::GetMusicTimePlayed( music ); 
+    }
 
-    /*─······································································─*/
+    float size( const music_t& music ) { 
+        return rl::GetMusicTimeLength( music ); 
+    }
 
-    void stop  () const noexcept { rl::StopMusicStream  ( obj->ctx ); obj->shot=false; }
+    int tell( const music_t& music, float pos ) { 
+        if( !is_valid( music ) )/*-----*/{ return -1; }
+        rl::SeekMusicStream( music, pos ); return  1;
+    }
 
-    void shot  () const noexcept { resume(); play(); obj->shot=true ; }
-
-    void play  () const noexcept { rl::PlayMusicStream  ( obj->ctx ); }
-
-    void pause () const noexcept { rl::PauseMusicStream ( obj->ctx ); }
-
-    void resume() const noexcept { rl::ResumeMusicStream( obj->ctx ); }
-
-    void update() const noexcept { rl::UpdateMusicStream( obj->ctx ); }
-
-    /*─······································································─*/
-
-    void next() const noexcept { 
-    //  console::log( obj->shot, fabsf(seek()-size()), is_playing() );
-        if( obj->shot && fabsf(seek()-size())<0.1f && is_playing() )
-          { stop(); set(0.0f); return; } update();
+    int next( const music_t& music ) { 
+        if( !is_valid( music ) ) /*-------*/ { return -1; }
+        float value = fabsf( seek(music) - size(music) );
+        if( value<0.1f && is_playing(music) ){ return -2; } 
+        update( music ); return 1;
     }
 
     /*─······································································─*/
 
-    rl::Music* operator->() const noexcept { return &get(); }
-
-    rl::Music& get() const noexcept { return obj->ctx; }
-
-    bool is_valid() const noexcept { 
-        if( obj->ctx.frameCount == 0 ){ return false; }
-        return rl::IsMusicValid( obj->ctx ); 
+    int unload( const music_t& music ){ 
+        if( !is_valid( music ) )/*--*/{ return -1; }
+        rl::UnloadMusicStream( music ); return  1; 
     }
 
-    /*─······································································─*/
-
-    void free() const noexcept {
-         if( !is_valid() ){ return; } rl::UnloadMusicStream( obj->ctx );
-    }
-
-}; }
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

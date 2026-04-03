@@ -14,44 +14,84 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class mesh_t : public global_t {
-protected:
+namespace ungine { namespace mesh {
 
-    struct NODE { rl::Mesh ctx={0}; };  ptr_t<NODE> obj;
-
-public:
+    model_t load( string_t path ) { return rl::LoadModel( path.get() ); }
 
     /*─······································································─*/
 
-    mesh_t( rl::Mesh mesh ) noexcept : global_t(), obj( new NODE() ){ obj->ctx = mesh; }
-
-   ~mesh_t() noexcept { if( obj.count()>1 ){ return; } free(); }
-
-    mesh_t() noexcept : global_t(), obj( new NODE() ){ }
+    bool is_valid( const model_t& model ) { return rl::IsModelValid( model ); }
 
     /*─······································································─*/
 
-    bool is_valid() const noexcept { return obj->ctx.vertexCount == 0; }
+    int set_texture_filter( const model_t& model, uint filter ) {
+        if ( !is_valid( model ) ){ return -1; }
+        for( auto x=model.materialCount; x--; ){
+        for( auto y=12 ; y--; ){ // MAX_MATERIAL_MAPS = 12
+             auto z=model.materials[x].maps[y].texture;
+        if ( z.id > 0 ) { 
+             rl:SetTextureFilter( z, filter );
+        }}}
+    return 1; }
 
-    rl::Mesh* operator->() const noexcept { return &get(); }
-
-    rl::Mesh& get() const noexcept { return obj->ctx; }
+    int set_wrap_mode( const model_t& model, uint flag ) {
+        if ( !is_valid( model ) ){ return -1; }
+        for( auto x=model.materialCount; x--; ){
+        for( auto y=12 ; y--; ){ // MAX_MATERIAL_MAPS = 12
+             auto z=model.materials[x].maps[y].texture;
+        if ( z.id > 0 ) { 
+             rl::SetTextureWrap( z, flag );
+        }}}
+    return 1; }
 
     /*─······································································─*/
 
-    /*
-    void draw( transform_3D_t pos, material_t material ){}
-    */
+    void draw( const model_t& model, transform_3D_t trn, color_t color, int mode ) {
+    rl::rlDisableBackfaceCulling();
 
-    /*─······································································─*/
+        auto rot = rl::QuaternionFromEuler(
+             trn.translate.rotation.x,
+             trn.translate.rotation.y,
+             trn.translate.rotation.z
+        );
+        
+        auto scl = trn.translate.scale;
+        auto pos = trn.translate.position;
 
-    void free() const noexcept { 
-         if( obj->ctx.vertexCount==0 ){ return; } 
-         rl::UnloadMesh( obj->ctx ); 
+        vec3_t axs ({ 0.0f, 0.0f, 0.0f }); float ang = 0.0f;
+
+    if( mode & ungine::shape::SHAPE_MODE_FACES ) { 
+        rl::QuaternionToAxisAngle( rot, &axs, &ang );
+        rl::DrawModelEx( model, pos, axs, ang*RAD2DEG, scl, color );
     }
 
-};}
+    elif( mode & ungine::shape::SHAPE_MODE_EDGES ){
+
+        rl::QuaternionToAxisAngle( rot, &axs, &ang );
+        rl::DrawModelWiresEx( model, pos, axs, ang*RAD2DEG, scl, color );
+
+    }
+
+    elif( mode & ungine::shape::SHAPE_MODE_VERTEX ){
+
+        rl::QuaternionToAxisAngle( rot, &axs, &ang );
+        rl::DrawModelPointsEx( model, pos, axs, ang*RAD2DEG, scl, color );
+
+    }
+
+    rl::rlEnableBackfaceCulling(); }
+
+    /*─······································································─*/
+
+    int unload( const model_t& model ){ 
+        if( !is_valid( model ) ){ return -1; }
+        rl::UnloadModel( model ); return  1; 
+    }
+
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

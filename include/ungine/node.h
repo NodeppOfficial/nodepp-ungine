@@ -21,35 +21,26 @@ namespace ungine { namespace node { struct NODE_TREE {
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { struct viewport_t {
-    int mask = visibility::MASK::VISIBILITY_MASK_ALL;
-    int mode = visibility::MODE::VISIBILITY_MODE_ON ;
-    color_t background = { 0, 0, 0, 255 };
-    ref_t<camera_2D_t> camera2D; 
-    ref_t<camera_3D_t> camera3D;
-    ref_t<render_t>    render  ;
-};}
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
 namespace ungine { class node_t : public global_t {
 public:
 
     event_t<node_t*,any_t> onCollision;
     event_t<>              onNext  ;
-    event_t<>              onOpen  ;
+    event_t<>              onU2D   ;
     event_t<>              onUI    ;
     event_t<>              on2D    ;
     event_t<>              on3D    ;
+    event_t<>              onU3D   ;
+    event_t<>              onUUI   ;
     event_t<>              onDraw  ;
     event_t<float>         onLoop  ;
-    event_t<>              onClose ;
+    event_t<node_t*>       onClose ;
 
 protected:
 
-    using  DONE = node::NODE_TREE; struct NODE {
-        ptr_t<task_t> evdr, evlp, evcl, evnx;
+    using DONE = node::NODE_TREE; struct NODE {
         bool state = false; DONE node;
+        ptr_t<task_t> task;
     };  ptr_t<NODE> obj;
 
     static void node_iterator( function_t<bool,node_t*> cb, node_t* root, bool deep ) {
@@ -74,65 +65,41 @@ protected:
          prnt->remove_child( *get_attribute<string_t>("name") );
     }
 
-    ptr_t<node_t> init_() {
+    ptr_t<node_t> init() {
         auto self = type::bind( this );
         self->set_attribute( "name", "root" ); 
         self->obj->node.node=&self; return self;
     }
 
-    void free_() const noexcept {
-
-        if ( !exists() ) /*---------*/ { return; } obj->state= false; 
-        for( auto x: get_children()   ){ x->obj->node.parent=nullptr; }
-        if ( !process::should_close() ){ remove_from_parent(); }
-        
-        onCollision.clear(); onNext.clear();
-        on2D       .clear(); onUI  .clear();
-        onOpen     .clear(); on3D  .clear(); 
-        onLoop     .clear(); /*--*/ clear();
-        
-        onClose .emit(); obj->node.parent = nullptr;
-        /*------------*/ obj->node.node   = nullptr;
-        
-        if( !process::should_close() ){ 
-            engine::onNext .off( obj->evnx );
-            engine::onLoop .off( obj->evlp );
-            engine::onDraw .off( obj->evdr );
-            engine::onClose.off( obj->evcl );
-        }
-
-    }
-
 public:
 
-   ~node_t() noexcept { if( obj.count()>1 ){ return; }free_(); }
-    node_t() noexcept : global_t(), obj( new NODE ) { init_(); }
+   ~node_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+    node_t() noexcept : global_t(), obj ( new NODE ) { init(); }
 
     /*─······································································─*/
 
-    node_t( function_t<void,ref_t<node_t>> cb ) noexcept : global_t(), obj( new NODE ) {
-        engine::locker.lock(); auto self = init_(); self->obj->state = true;
+    node_t( function_t<void,ptr_t<node_t>> cb ) noexcept : global_t(), obj( new NODE ) {
+        engine::locker.lock(); auto self = init(); obj->state = true;
+        obj->task = engine::onClose.once([=](){ self->free(); });
 
-        obj->evcl = engine::onClose([=](){ self->free_(); });
-        obj->evlp = engine::onLoop ([=]( float delta ){
-            if( !self->exists() ){ return; }
-                 self->onLoop.emit( delta );
-        });
+        engine::onLoop.add([=]( float delta ){
+            if( !self->exists() ){ return -1; }
+            self->onLoop.emit( delta );
+        return 1; });
 
-        obj->evnx = engine::onNext([=]( /**/ ){
-            if( !self->exists() ){ return; }
-                 self->onNext.emit();
-        });
+        engine::onNext.add([=]( /**/ ){
+            if( !self->exists() ){ return -1; }
+            self->onNext.emit();
+        return 1; });
 
-        obj->evdr = engine::onDraw([=]( /**/ ){
-            if( !self->exists() ){ return; }
-                 self->onDraw.emit(); 
-        });
+        engine::onDraw.add([=]( /**/ ){
+            if( !self->exists() ){ return -1; }
+            self->onDraw.emit(); 
+        return 1; });
 
         process::add([=](){
-            cb( self ); self->onOpen.emit(); 
-            engine::locker.unlock(); return -1;
-        });
+            cb( self ); engine::locker.unlock(); 
+        return -1; });
 
     }
 
@@ -202,9 +169,12 @@ public:
 
         //  if( node->has_attribute( "viewport" ) ){ return; }
 
-            if( !node->on3D.empty() ){ que->event3D.push( node->on3D ); }
-            if( !node->on2D.empty() ){ que->event2D.push( node->on2D ); }
-            if( !node->onUI.empty() ){ que->eventUI.push( node->onUI ); }
+            if( !node->on3D .empty() ){ que->event3D .push( node->on3D  ); }
+            if( !node->on2D .empty() ){ que->event2D .push( node->on2D  ); }
+            if( !node->onUI .empty() ){ que->eventUI .push( node->onUI  ); }
+            if( !node->onU2D.empty() ){ que->eventU2D.push( node->onU2D ); }
+            if( !node->onU3D.empty() ){ que->eventU3D.push( node->onU3D ); }
+            if( !node->onUUI.empty() ){ que->eventUUI.push( node->onUUI ); }
 
         return true; }, true ); return que;
 
@@ -273,17 +243,34 @@ public:
 
     bool exists() const noexcept { return obj->state && obj->node.node!=nullptr; }
 
-    void free() const noexcept { auto self = type::bind( this );
-        if( !self->exists() ) { return; } /*-----------*/
-        process::add([=](){ self->free_(); return -1; }); 
+    /*─······································································─*/
+
+    void free() const noexcept {
+
+        if ( !exists() ) /*---------*/ { return; } obj->state= false ; 
+        for( auto x: get_children()   ){ x->obj->node.parent =nullptr; }
+        if ( !process::should_close() ){ remove_from_parent(); }
+
+        onCollision.clear(); onNext.clear();
+        onLoop     .clear(); onDraw.clear();
+        onUI       .clear(); onUUI .clear();
+        on2D       .clear(); onU2D .clear();
+        on3D       .clear(); onU3D .clear();
+        
+        engine::onClose.off( obj->task );
+        onClose.emit( (node_t*) this );
+        
+        obj->node.parent = nullptr;
+        obj->node.node   = nullptr;
+
     }
 
 };}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t node_UI( function_t<void,ref_t<node_t>> clb ){
-return node_t([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_UI( function_t<void,ptr_t<node_t>> clb ){
+return node_t([=]( ptr_t<node_t> self ){
 
     auto tmp /**/ = visibility_t();
          tmp.mode = visibility::MODE::VISIBILITY_MODE_ON ;
@@ -323,8 +310,8 @@ clb(self); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t node_2D( function_t<void,ref_t<node_t>> clb ){
-return node_t([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_2D( function_t<void,ptr_t<node_t>> clb ){
+return node_t([=]( ptr_t<node_t> self ){
 
     auto tmp /**/ = visibility_t();
          tmp.mode = visibility::MODE::VISIBILITY_MODE_ON ;
@@ -364,8 +351,8 @@ clb(self); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t node_3D( function_t<void,ref_t<node_t>> clb ){
-return node_t([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_3D( function_t<void,ptr_t<node_t>> clb ){
+return node_t([=]( ptr_t<node_t> self ){
 
     auto tmp /**/ = visibility_t();
          tmp.mode = visibility::MODE::VISIBILITY_MODE_ON ;
@@ -402,6 +389,131 @@ return node_t([=]( ref_t<node_t> self ){
     }});
 
 clb(self); }); }}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace node { 
+
+    node_t node_light( light_t light, function_t<void,ptr_t<node_t>> clb ){
+    return node_3D([=]( ptr_t<node_t> self ){ 
+
+        self->set_attribute( "light", light );
+        auto vpt = self->get_viewport();
+
+    if( vpt==nullptr ){ return; }
+
+        vpt->queue_light.push( &self ); auto ID=vpt->queue_light.last();
+        self->onClose([=]( node_t* ){ vpt->queue_light.erase(ID); });
+
+        auto pos = self->get_attribute<transform_3D_t>( "transform" );
+        auto lgh = self->get_attribute<light_t>( "light" );
+        auto mtx = self->get_root_viewport()->matrix;
+
+        self->onNext([=](){
+
+            int  x  = (int) matrix::get_pixel_float( mtx, 5, 0, 3 );
+            auto lgt= *lgh; lgt.color.a = (uchar) lgt.mode;
+            auto dir= math::vec3::rotation( 
+                vec3_t({ 0, 1, 0 }),
+            math::quaternion::from_euler( 
+                pos->translate.rotation 
+            ));
+
+        if( lgt.mode == light::MODE::LIGHT_MODE_NONE ){ return; }
+
+            matrix::set_pixel_float( mtx, x, 1, 0, pos->translate.position.x );
+            matrix::set_pixel_float( mtx, x, 1, 1, pos->translate.position.y );
+            matrix::set_pixel_float( mtx, x, 1, 2, pos->translate.position.z );
+            matrix::set_pixel_color( mtx, x, 1, 3, lgt.color );
+
+            matrix::set_pixel_float( mtx, x, 2, 0, pos->translate.scale.x );
+            matrix::set_pixel_float( mtx, x, 2, 1, pos->translate.scale.y );
+            matrix::set_pixel_float( mtx, x, 2, 2, pos->translate.scale.z );
+            matrix::set_pixel_float( mtx, x, 2, 3, lgt.wrap );
+
+            matrix::set_pixel_float( mtx, x, 3, 0, dir.x );
+            matrix::set_pixel_float( mtx, x, 3, 1, dir.y );
+            matrix::set_pixel_float( mtx, x, 3, 2, dir.z );
+            matrix::set_pixel_float( mtx, x, 3, 3, lgt.energy );
+
+            matrix::set_pixel_float( mtx, 5, 0, 3, (float)( x + 1 ) );
+            
+        });
+
+    clb( self ); }); }
+
+
+    node_t node_light( function_t<void,ptr_t<node_t>> clb ){
+    return node_light( light_t(), clb ); }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace node { 
+
+    node_t node_audio_3D( const music_t music, function_t<void,ptr_t<node_t>> clb ){
+    return node_3D([=]( ptr_t<node_t> self ){
+
+        self->set_attribute( "music", music );
+        auto pos = self->get_attribute<transform_3D_t>("transform");
+        auto snd = self->get_attribute<music_t>( "music" );
+        auto vpt = self->get_viewport();
+
+        self->onClose([=]( node_t* ){ music::unload( music ); });
+        self->onNext.add( coroutine::add( COROUTINE(){
+        coBegin
+
+            if( music::is_valid( *snd ) ) { coEnd } while( true ){ 
+                coWait( !music::is_playing( *snd ) ); 
+            do {
+
+                if( fabsf( music::seek( *snd ) - music::size( *snd ) ) < 0.1f &&
+                    snd->looping && music::is_playing( *snd )
+                ) { music::stop( *snd ); music::tell( *snd, 0.f ); break; }
+                
+                music::update( *snd );
+
+            } while(0); coNext; }
+
+        coFinish
+        }));
+
+        self->onLoop.add([=]( float delta ){
+            if( vpt == nullptr ) /**/ { return -1; }
+            if( vpt->camera3D.null() ){ return -1; }
+            if( pos == nullptr ) /**/ { return -1; }
+
+            auto cam_pos = vpt->camera3D->position;
+            auto cam_tar = vpt->camera3D->target  ;
+
+            float dist = math::distance( cam_pos, pos->position );
+            float max_dist = 50.0f;
+            float volume = 1.0f - ( dist / max_dist );
+            if  ( volume < 0.0f ) { volume = 0.0f; }
+
+            music::set_volume( *snd, volume * volume );
+
+            vec3_t relative = Vector3Subtract ( pos->position, cam_pos );
+            vec3_t forward  = Vector3Normalize( Vector3Subtract( cam_tar, cam_pos ) );
+            vec3_t right    = Vector3Normalize( Vector3CrossProduct( forward, {0,1,0} ) );
+
+            float pan = Vector3DotProduct( Vector3Normalize(relative), right );
+            music::set_pan( *snd, ( pan + 1.0f ) / 2.0f );
+
+        return 1; });
+
+    clb( self ); }); } 
+
+    /*─······································································─*/
+
+    node_t node_audio( const music_t music, function_t<void,ptr_t<node_t>> clb ){
+    return node_audio_3D( music, [=]( ptr_t<node_t> self ){
+           self->onLoop.clear();
+           self->remove_attribute( "transform" ); 
+    clb( self ); }); } 
+
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

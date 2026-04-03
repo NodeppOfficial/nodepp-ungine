@@ -14,242 +14,172 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef GPU_KERNEL
-#define GPU_KERNEL(...) #__VA_ARGS__
-#endif
-
-#if _KERNEL_ == NODEPP_KERNEL_WASM
-    #define GLSL_VERSION "#version 100\nprecision mediump float;\n"
-#else 
-#if defined(GRAPHICS_API_OPENGL_33)
-    #define GLSL_VERSION "#version 330\n"
-#elif defined(GRAPHICS_API_OPENGL_21)
-    #define GLSL_VERSION "#version 120\n"
-#else
-    #define GLSL_VERSION "#version 100\nprecision mediump float;\n"
-#endif
-#endif
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
 namespace ungine { namespace gpu { 
 
-template< class T > struct gpu_type_id         { static constexpr uchar value = 0xff; };
+template< class T > struct gpu_type_id  { static constexpr uchar value = 0xff; };
 
-template<> struct gpu_type_id<ptr_t<int>>      { static constexpr uchar value = 0x01; };
-template<> struct gpu_type_id<ptr_t<bool>>     { static constexpr uchar value = 0x02; };
-template<> struct gpu_type_id<ptr_t<uint>>     { static constexpr uchar value = 0x03; };
-template<> struct gpu_type_id<ptr_t<float>>    { static constexpr uchar value = 0x04; };
+template<> struct gpu_type_id<int>      { static constexpr uchar value = 0x01; };
+template<> struct gpu_type_id<bool>     { static constexpr uchar value = 0x02; };
+template<> struct gpu_type_id<uint>     { static constexpr uchar value = 0x03; };
+template<> struct gpu_type_id<float>    { static constexpr uchar value = 0x04; };
 
-template<> struct gpu_type_id<ptr_t<bvec2_t>>  { static constexpr uchar value = 0x11; };
-template<> struct gpu_type_id<ptr_t<ivec2_t>>  { static constexpr uchar value = 0x12; };
-template<> struct gpu_type_id<ptr_t<uvec2_t>>  { static constexpr uchar value = 0x13; };
-template<> struct gpu_type_id<ptr_t<vec2_t>>   { static constexpr uchar value = 0x14; };
+template<> struct gpu_type_id<bvec2_t>  { static constexpr uchar value = 0x11; };
+template<> struct gpu_type_id<ivec2_t>  { static constexpr uchar value = 0x12; };
+template<> struct gpu_type_id<uvec2_t>  { static constexpr uchar value = 0x13; };
+template<> struct gpu_type_id<vec2_t>   { static constexpr uchar value = 0x14; };
 
-template<> struct gpu_type_id<ptr_t<bvec3_t>>  { static constexpr uchar value = 0x21; };
-template<> struct gpu_type_id<ptr_t<ivec3_t>>  { static constexpr uchar value = 0x22; };
-template<> struct gpu_type_id<ptr_t<uvec3_t>>  { static constexpr uchar value = 0x23; };
-template<> struct gpu_type_id<ptr_t<vec3_t>>   { static constexpr uchar value = 0x24; };
+template<> struct gpu_type_id<bvec3_t>  { static constexpr uchar value = 0x21; };
+template<> struct gpu_type_id<ivec3_t>  { static constexpr uchar value = 0x22; };
+template<> struct gpu_type_id<uvec3_t>  { static constexpr uchar value = 0x23; };
+template<> struct gpu_type_id<vec3_t>   { static constexpr uchar value = 0x24; };
 
-template<> struct gpu_type_id<ptr_t<bvec4_t>>  { static constexpr uchar value = 0x31; };
-template<> struct gpu_type_id<ptr_t<ivec4_t>>  { static constexpr uchar value = 0x32; };
-template<> struct gpu_type_id<ptr_t<uvec4_t>>  { static constexpr uchar value = 0x33; };
-template<> struct gpu_type_id<ptr_t<vec4_t>>   { static constexpr uchar value = 0x34; };
+template<> struct gpu_type_id<bvec4_t>  { static constexpr uchar value = 0x31; };
+template<> struct gpu_type_id<ivec4_t>  { static constexpr uchar value = 0x32; };
+template<> struct gpu_type_id<uvec4_t>  { static constexpr uchar value = 0x33; };
+template<> struct gpu_type_id<vec4_t >  { static constexpr uchar value = 0x34; };
+template<> struct gpu_type_id<color_t>  { static constexpr uchar value = 0x35; };
 
-template<> struct gpu_type_id<ptr_t<mat_t>>    { static constexpr uchar value = 0x50; };
-template<> struct gpu_type_id<ptr_t<texture_t>>{ static constexpr uchar value = 0x51; };
-template<> struct gpu_type_id<ptr_t<render_t>> { static constexpr uchar value = 0x52; };
+template<> struct gpu_type_id<mat_t>    { static constexpr uchar value = 0x50; };
+template<> struct gpu_type_id<texture_t>{ static constexpr uchar value = 0x51; };
+template<> struct gpu_type_id<render_t >{ static constexpr uchar value = 0x52; };
 
 }}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { struct shader_t{
-protected:
+namespace ungine { namespace shader {
 
-    struct SVAR { uchar type; any_t value; };
+    void set_variable( const shader_t& shader, string_t name, int /*unused*/, const texture_t* value, int /*unused*/ ) {
+         int sid = rl::GetShaderLocation( shader, name.get() );
+    if ( sid == -1 ){ return; }
+         rl::SetShaderValueTexture( shader, sid, *value );
+    }
 
-    struct NODE {
-        map_t<string_t,SVAR> f_vars;
-        map_t<string_t,SVAR> v_vars;
-        ptr_t<rl::Shader> ctx;
-        string_t fs, vs; 
-    };  ptr_t<NODE> obj;
+    void set_variable( const shader_t& shader, string_t name, int /*unused*/, const mat_t* value, int count ) {
+         int sid = rl::GetShaderLocation( shader, name.get() );
+    if ( sid == -1 ){ return; }
+         rl::rlEnableShader( shader.id );
+         rl::rlSetUniformMatrices( sid, value, count );
+    }
+
+    template< class T >
+    void set_variable( const shader_t& shader, string_t name, int flag, const T* value, int count ) {
+         int sid = rl::GetShaderLocation( shader, name.get() );
+    if ( sid == -1 ){ return; }
+         rl::SetShaderValueV( shader, sid, value, flag, count );
+    }
+
+    /*─······································································─*/
+
+    bool is_valid( const shader_t& shader ){ return rl::IsShaderValid( shader ); }
+    void begin   ( const shader_t& shader ){ rl::BeginShaderMode( shader ); }
+    void end     () /*------------------*/ { rl::EndShaderMode  (); }
 
     /*─······································································─*/
 
     template< class T >
-    void set_variable( string_t name, int flag, const T& value ) const noexcept {
-         int sid = rl::GetShaderLocation( *obj->ctx, name.get() );
-         SetShaderValueV( *obj->ctx, sid, &value, flag, 1 );
-    }
-
-    void set_texture( string_t name, const texture_t& value ) const noexcept {
-         int sid = rl::GetShaderLocation( *obj->ctx, name.get() );
-         SetShaderValueTexture( *obj->ctx, sid, value.get() );        
-    }
-
-    void set_render( string_t name, const render_t& value ) const noexcept {
-         int sid = rl::GetShaderLocation( *obj->ctx, name.get() );
-         SetShaderValueTexture( *obj->ctx, sid, value.get().texture );        
-    }
-
-    void set_matrix( string_t name, const mat_t& value ) const noexcept {
-         int sid = rl::GetShaderLocation( *obj->ctx, name.get() );
-         SetShaderValueMatrix( *obj->ctx, sid, value );        
-    }
-
-    /*─······································································─*/
-
-    int set_vertex_variables() const noexcept {
-    if ( obj->ctx.null() || !is_valid() ) /*--*/ { return -1; }
-    for( auto x: obj->v_vars.data() ){ switch( x.second.type ){
-
-        case 0x04: set_variable( x.first, gpu::ATTRIBUTE_FLOAT, *x.second.value.as<ptr_t<float>> ()); break;
-        case 0x14: set_variable( x.first, gpu::ATTRIBUTE_VEC2 , *x.second.value.as<ptr_t<vec2_t>>()); break;
-        case 0x24: set_variable( x.first, gpu::ATTRIBUTE_VEC3 , *x.second.value.as<ptr_t<vec3_t>>()); break;
-        case 0x34: set_variable( x.first, gpu::ATTRIBUTE_VEC4 , *x.second.value.as<ptr_t<vec4_t>>()); break;
-
-        case 0x50: set_matrix  ( x.first, *x.second.value.as<ptr_t<mat_t>>    () ); /*-------------*/ break;
-        case 0x51: set_texture ( x.first, *x.second.value.as<ptr_t<texture_t>>() ); /*-------------*/ break;
-        case 0x52: set_render  ( x.first, *x.second.value.as<ptr_t<render_t>> () ); /*-------------*/ break;
-
-        default  : continue; /*--------------------------------------------------------------------*/ break; 
-
-    }} return 1; }
-
-    int set_fragment_variables() const noexcept {
-    if ( obj->ctx.null() || !is_valid() ) /*--*/ { return -1; }
-    for( auto x: obj->f_vars.data() ){ switch( x.second.type ){
-
-        case 0x01: set_variable( x.first, gpu::UNIFORM_BOOL , *x.second.value.as<ptr_t<bool>> ());   break;
-        case 0x02: set_variable( x.first, gpu::UNIFORM_INT  , *x.second.value.as<ptr_t<int>>  ());   break;
-        case 0x03: set_variable( x.first, gpu::UNIFORM_UINT , *x.second.value.as<ptr_t<uint>> ());   break;
-        case 0x04: set_variable( x.first, gpu::UNIFORM_FLOAT, *x.second.value.as<ptr_t<float>>());   break;
-
-        case 0x11: set_variable( x.first, gpu::UNIFORM_BVEC2, *x.second.value.as<ptr_t<bvec2_t>>()); break;
-        case 0x12: set_variable( x.first, gpu::UNIFORM_IVEC2, *x.second.value.as<ptr_t<ivec2_t>>()); break;
-        case 0x13: set_variable( x.first, gpu::UNIFORM_UVEC2, *x.second.value.as<ptr_t<uvec2_t>>()); break;
-        case 0x14: set_variable( x.first, gpu::UNIFORM_VEC2 , *x.second.value.as<ptr_t<vec2_t>> ()); break;
-
-        case 0x21: set_variable( x.first, gpu::UNIFORM_BVEC3, *x.second.value.as<ptr_t<bvec3_t>>()); break;
-        case 0x22: set_variable( x.first, gpu::UNIFORM_IVEC3, *x.second.value.as<ptr_t<ivec3_t>>()); break;
-        case 0x23: set_variable( x.first, gpu::UNIFORM_UVEC3, *x.second.value.as<ptr_t<uvec3_t>>()); break;
-        case 0x24: set_variable( x.first, gpu::UNIFORM_VEC3 , *x.second.value.as<ptr_t<vec3_t>> ()); break;
-
-        case 0x31: set_variable( x.first, gpu::UNIFORM_BVEC4, *x.second.value.as<ptr_t<bvec4_t>>()); break;
-        case 0x32: set_variable( x.first, gpu::UNIFORM_IVEC4, *x.second.value.as<ptr_t<ivec4_t>>()); break;
-        case 0x33: set_variable( x.first, gpu::UNIFORM_UVEC4, *x.second.value.as<ptr_t<uvec4_t>>()); break;
-        case 0x34: set_variable( x.first, gpu::UNIFORM_VEC4 , *x.second.value.as<ptr_t<vec4_t>> ()); break;
-
-        case 0x50: set_matrix  ( x.first, *x.second.value.as<ptr_t<mat_t>>    () ); /*------------*/ break;
-        case 0x51: set_texture ( x.first, *x.second.value.as<ptr_t<texture_t>>() ); /*------------*/ break;
-        case 0x52: set_render  ( x.first, *x.second.value.as<ptr_t<render_t>> () ); /*------------*/ break;
-
-        default  : continue; /*-------------------------------------------------------------------*/ break; 
-
-    }} return 1; }
-
-    /*─······································································─*/
-
-    string_t format_fs_shader() const noexcept {
-        if( obj->fs.empty() ) /*---*/ { return nullptr; }
-        return regex::format( "${0}${1}", GLSL_VERSION, obj->fs );
-    }
-
-    string_t format_vs_shader() const noexcept {
-        if( obj->vs.empty() ) /*---*/ { return nullptr; }
-        return regex::format( "${0}${1}", GLSL_VERSION, obj->vs );
-    }
-
-public:
-
-    shader_t() noexcept : obj( new NODE() ) { /*-----*/ }
-   ~shader_t() { if( obj.count()>1 ){ return; } free(); }
-
-    /*─······································································─*/
-
-    void set_fragment_shader( file_t file ) const noexcept { obj->fs=stream::await(file); }
-
-    void set_fragment_shader( string_t code ) const noexcept { obj->fs=code; }
+    int set_attribute( const shader_t& shader, string_t name, const T* value, int count ){
+    if( !is_valid( shader ) ){ return -1; } switch( gpu::gpu_type_id<T>::value ){
+        case 0x04: set_variable( shader, name, gpu::ATTRIBUTE_FLOAT, value, count ); break;
+        case 0x14: set_variable( shader, name, gpu::ATTRIBUTE_VEC2 , value, count ); break;
+        case 0x24: set_variable( shader, name, gpu::ATTRIBUTE_VEC3 , value, count ); break;
+        case 0x34: set_variable( shader, name, gpu::ATTRIBUTE_VEC4 , value, count ); break;
+        case 0x35: set_variable( shader, name, gpu::ATTRIBUTE_VEC4 , value, count ); break;
+        case 0x50: case 0x51:
+        /*------*/ set_variable( shader, name, 0 /*-------------*/ , value, count ); break;
+    }   return  1; }
 
     template< class T >
-    void append_uniform( string_t name, T value ) const noexcept {
-    auto val = type::bind( value ); obj->f_vars[name] = SVAR({ 
-               gpu::gpu_type_id<decltype(val)>::value, val
-    }); }
-
-    void remove_uniform( string_t name ) const noexcept {
-         obj->f_vars.erase(name);
+    int set_attribute( const shader_t& shader, string_t name, const T& value ){
+        return set_attribute( shader, name, &value, 1 );
     }
 
     /*─······································································─*/
-
-    void set_vertex_shader( file_t file ) const noexcept { obj->vs=stream::await(file); }
-
-    void set_vertex_shader( string_t code ) const noexcept { obj->vs=code; }
 
     template< class T >
-    void append_attribute( string_t name, T value ) const noexcept {
-    auto val = type::bind( value ); obj->v_vars[name] = SVAR({ 
-               gpu::gpu_type_id<decltype(val)>::value, val
-    }); }
+    int set_uniform( const shader_t& shader, string_t name, const T* value, int count ){
+    if( !is_valid( shader ) ){ return -1; } switch( (uchar) gpu::gpu_type_id<T>::value ){
 
-    void remove_attribute( string_t name ) const noexcept {
-         obj->v_vars.erase(name);
+        case 0x01: set_variable( shader, name, gpu::UNIFORM_BOOL , value, count ); break;
+        case 0x02: set_variable( shader, name, gpu::UNIFORM_INT  , value, count ); break;
+        case 0x03: set_variable( shader, name, gpu::UNIFORM_UINT , value, count ); break;
+        case 0x04: set_variable( shader, name, gpu::UNIFORM_FLOAT, value, count ); break;
+
+        case 0x11: set_variable( shader, name, gpu::UNIFORM_BVEC2, value, count ); break;
+        case 0x12: set_variable( shader, name, gpu::UNIFORM_IVEC2, value, count ); break;
+        case 0x13: set_variable( shader, name, gpu::UNIFORM_UVEC2, value, count ); break;
+        case 0x14: set_variable( shader, name, gpu::UNIFORM_VEC2 , value, count ); break;
+
+        case 0x21: set_variable( shader, name, gpu::UNIFORM_BVEC3, value, count ); break;
+        case 0x22: set_variable( shader, name, gpu::UNIFORM_IVEC3, value, count ); break;
+        case 0x23: set_variable( shader, name, gpu::UNIFORM_UVEC3, value, count ); break;
+        case 0x24: set_variable( shader, name, gpu::UNIFORM_VEC3 , value, count ); break;
+
+        case 0x31: set_variable( shader, name, gpu::UNIFORM_BVEC4, value, count ); break;
+        case 0x32: set_variable( shader, name, gpu::UNIFORM_IVEC4, value, count ); break;
+        case 0x33: set_variable( shader, name, gpu::UNIFORM_UVEC4, value, count ); break;
+        case 0x34: set_variable( shader, name, gpu::UNIFORM_VEC4 , value, count ); break;
+        
+        case 0x35: set_variable( shader, name, gpu::UNIFORM_VEC4 , value, count ); break;
+        case 0x50: case 0x51:
+        /*------*/ set_variable( shader, name, 0 /*-----------*/ , value, count ); break;
+
+    }   return  1; }
+
+    template< class T >
+    int set_uniform( const shader_t& shader, string_t name, const T& value ){
+        return set_uniform( shader, name, &value, 1 );
     }
 
     /*─······································································─*/
 
-    rl::Shader* operator->() const noexcept { return &get(); }
+    int set_location( const shader_t& shader, string_t name, uint location ) {
+        if( name.empty() || location==-1 || !is_valid( shader ) ){ return -1; }
+        int sid = rl::GetShaderLocation( shader, name.get() );
+        if( sid==-1 ){ return -1; } shader.locs[location]=sid;
+    return 1; }
 
-    rl::Shader& get() const noexcept { return *obj->ctx; }
-
-    bool is_valid() const noexcept { 
-        if( obj->ctx.null() ){ return false; }
-        return rl::IsShaderValid( *obj->ctx ); 
+    int get_location( const shader_t& shader, string_t name, uint location ) {
+        if( name.empty() || location==-1 || !is_valid( shader ) ){ return -1; }
+        return rl::GetShaderLocation( shader, name.get() );
     }
 
     /*─······································································─*/
 
-    void emit( function_t<void> cb ) const /*noexcept*/ {
-        if( is_valid() ){
-            rl::BeginShaderMode(*obj->ctx); next(); cb();
-            rl::EndShaderMode(); /*--------------------*/
-        }
+    shader_t load( string_t vs_code, string_t fs_code ){
+
+        auto kn = kernel::mk_default_kernel();
+        auto vs = regex ::format( "${0}\n${2}\n${1}", GLSL_VERSION, vs_code, kn );
+        auto fs = regex ::format( "${0}\n${2}\n${1}", GLSL_VERSION, fs_code, kn );
+
+        auto sh = rl::LoadShaderFromMemory( 
+               vs_code.empty() ? 0 : vs.get(),
+               fs_code.empty() ? 0 : fs.get()
+        ); 
+
+        if( !shader::is_valid( sh ) ){ return sh; }
+
+        shader::set_location( sh, "roughness", rl::SHADER_LOC_MAP_ROUGHNESS );
+        shader::set_location( sh, "specular" , rl::SHADER_LOC_MAP_SPECULAR  );
+        shader::set_location( sh, "emission" , rl::SHADER_LOC_MAP_EMISSION  );
+        shader::set_location( sh, "albedo"   , rl::SHADER_LOC_MAP_DIFFUSE   );
+        shader::set_location( sh, "game"     , rl::SHADER_LOC_MAP_BRDF      );
+        shader::set_location( sh, "normal"   , rl::SHADER_LOC_MAP_NORMAL    );
+        shader::set_location( sh, "mtx"      , rl::SHADER_LOC_MATRIX_MODEL  );
+        shader::set_location( sh, "ttx"      , rl::SHADER_LOC_MATRIX_MVP    );
+        shader::set_location( sh, "vtx"      , rl::SHADER_LOC_MATRIX_VIEW   );
+        shader::set_location( sh, "ptx"      , rl::SHADER_LOC_MATRIX_PROJECTION );
+
+    return sh; }
+
+    /*─······································································─*/
+
+    int unload( const shader_t& shader ){ 
+        if( !is_valid( shader ) ) { return -1; }
+        rl::UnloadShader( shader ); return  1; 
     }
 
-    /*─······································································─*/
-
-    int next() const /*noexcept*/ { return (
-         set_vertex_variables  ()==1 &&
-         set_fragment_variables()==1
-    ) ? 1 : -1; }
-
-    /*─······································································─*/
-
-    int compile() const noexcept {
-
-        if(!obj->ctx.null() ){ rl::UnloadShader( *obj->ctx ); }
-
-        auto fs = format_fs_shader();
-        auto vs = format_vs_shader();
-
-        obj->ctx = type::bind( rl::LoadShaderFromMemory( 
-            vs.empty() ? 0 : vs.get(),
-            fs.empty() ? 0 : fs.get()
-        ));
-
-    return is_valid() ? 1 : -1; }
-
-    /*─······································································─*/
-
-    void free() const noexcept {
-         if( !is_valid() ){ return; } rl::UnloadShader( *obj->ctx );
-         obj->ctx.free();
-    }
-
-}; }
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

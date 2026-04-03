@@ -14,115 +14,35 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class render_t : public global_t {
-protected:
+namespace ungine { namespace render {
 
-    struct NODE { rl::RenderTexture txt; char filter=-1; }; ptr_t<NODE> obj;
-
-public:
-
-    /*─······································································─*/
-
-   ~render_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+    void begin    ( const render_t& render, int layer ){ rl::BeginTextureMode( render, layer ); }
+    bool is_valid ( const render_t& render ){ return rl::IsGBufferValid( render ); }
+    void end      () /*------------------*/ { rl::EndTextureMode  (); }
+    uint get_layer() { return rl::GetRenderLayer(); }
 
     /*─······································································─*/
 
-    render_t( rl::RenderTexture texture ) noexcept : global_t(), obj( new NODE() ){
-        obj->txt = texture;
+    render_t load( int width, int height, int depth ) {
+        return rl::LoadGBuffer( width, height, depth );
     }
 
-    render_t( int width, int height ) noexcept : global_t(), obj( new NODE() ){
-        set_size( width, height );
+    render_t load( int depth ) {
+        int width  = rl::GetRenderWidth ();
+        int height = rl::GetRenderHeight();
+        return rl::LoadGBuffer( width, height, depth );
     }
-    
-    render_t() noexcept : global_t(), obj( new NODE() ){ 
-        set_size( rl::GetRenderWidth(), rl::GetRenderHeight() );
-    }
+
+    render_t load() { return load( 1 ); }
 
     /*─······································································─*/
 
-    rl::RenderTexture* operator->() const noexcept { return &get(); }
-
-    rl::RenderTexture& get() const noexcept { return obj->txt; }
-
-    void set_filter( uint filter ) const noexcept {
-         if( obj->filter==filter ){ return; }
-         rl::SetTextureFilter( obj->txt.depth  , filter );
-         rl::SetTextureFilter( obj->txt.texture, filter );
-         obj->filter = filter;
+    int unload( const render_t& render ) {
+         if( !is_valid( render ) )  { return -1; } 
+         rl::UnloadGBuffer( render ); return  1;
     }
 
-    bool is_valid() const noexcept { 
-        if( obj->txt.texture.width == 0 ){ return 0; }
-        return rl::IsRenderTextureValid( obj->txt ); 
-    }
-
-    /*─······································································─*/
-
-    rl::Vector2 size() const noexcept {
-        if( !is_valid() ){ return rl::Vector2({ 0, 0 }); }
-        /*--------------*/ return { 
-            type::cast<float>( obj->txt.texture.width  ), 
-            type::cast<float>( obj->txt.texture.height ) 
-        };
-    }
-
-    /*─······································································─*/
-
-    rl::Texture& get_texture() const noexcept { return obj->txt.texture; }
-    rl::Texture& get_depth  () const noexcept { return obj->txt.depth;   }
-
-    /*─······································································─*/
-
-    void draw( transform_2D_t pos, rect_t src ) const noexcept {
-        auto origin = pos.translate.scale / 2; rl::DrawTexturePro( 
-            obj->txt.texture, src, rect_t({
-                pos.translate.position.x, pos.translate.position.y,
-                pos.translate.scale.x,    pos.translate.scale.y
-            }), origin, pos.translate.rotation * RAD2DEG, rl::WHITE 
-        );
-    }
-
-    void draw( transform_2D_t pos ) const noexcept {
-        auto origin = pos.translate.scale / 2; rl::DrawTexturePro( 
-            obj->txt.texture, rect_t({
-                0, 0, type::cast<float>( obj->txt.texture.width  ), 
-                /*-*/ type::cast<float>( obj->txt.texture.height )
-            }), rect_t({
-                pos.translate.position.x, pos.translate.position.y,
-                pos.translate.scale.x,    pos.translate.scale.y
-            }), origin, pos.translate.rotation * RAD2DEG, rl::WHITE 
-        );
-    }
-
-    /*─······································································─*/
-
-    void emit( function_t<void> cb ) const noexcept {
-         rl::BeginTextureMode( obj->txt ); cb();
-         rl::EndTextureMode  (); /*-----------*/
-    }
-
-    /*─······································································─*/
-
-    vec2_t get_size() const noexcept { return vec2_t({ 
-        type::cast<float>( obj->txt.texture.width  ), 
-        type::cast<float>( obj->txt.texture.height ) 
-    }); }
-
-    void set_size( int width, int height ) const noexcept {
-        if( obj->txt.texture.width==width && obj->txt.texture.height==height )
-          { return; } free(); obj->txt = rl::LoadRenderTexture( width,height );
-          set_filter( rl::TEXTURE_FILTER_BILINEAR );
-    }
-
-    /*─······································································─*/
-
-    void free() const noexcept {
-         if( !is_valid() ){ return; } 
-         rl::UnloadRenderTexture( obj->txt ); obj->filter=-1;
-    }
-
-};}
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

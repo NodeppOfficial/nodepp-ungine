@@ -18,11 +18,11 @@ namespace ungine { namespace window {
 
     inline void set_position( ivec2_t pos )    { rl::SetWindowPosition( pos.x, pos.y ); }
 
-    inline void set_icon( image_t image )      { rl::SetWindowIcon( image.get() ); }
-
     inline void set_title( string_t name )     { rl::SetWindowTitle( name.get() ); }
 
     inline vec2_t get_position()               { return rl::GetWindowPosition(); }
+
+    inline void set_icon( image_t image )      { rl::SetWindowIcon( image ); }
 
     inline void focus()                        { rl::SetWindowFocused(); }
 
@@ -57,21 +57,21 @@ namespace ungine { namespace window {
 
 namespace ungine { namespace monitor {
 
-    inline ivec2_t get_size( int idx ) { return ivec2_t({ rl::GetMonitorWidth(idx), rl::GetMonitorHeight(idx) }); }
+    inline ivec2_t get_size( int idx )     { return ivec2_t({ rl::GetMonitorWidth(idx), rl::GetMonitorHeight(idx) }); }
 
-    inline int get_index()                   { return rl::GetCurrentMonitor(); }
+    inline int get_index()                 { return rl::GetCurrentMonitor(); }
 
-    inline int count()                       { return rl::GetMonitorCount(); }
+    inline int count()                     { return rl::GetMonitorCount(); }
 
-    inline void set( int idx )               { rl::SetWindowMonitor( idx ); }
+    inline void set( int idx )             { rl::SetWindowMonitor( idx ); }
 
-    inline vec2_t get_scale_DPI()            { return rl::GetWindowScaleDPI(); }
+    inline vec2_t get_scale_DPI()          { return rl::GetWindowScaleDPI(); }
 
-    inline string_t get_name( int idx )      { return rl::GetMonitorName( idx ); }
+    inline string_t get_name( int idx )    { return rl::GetMonitorName( idx ); }
 
-    inline vec2_t get_position( int idx )    { return rl::GetMonitorPosition( idx ); }
+    inline vec2_t get_position( int idx )  { return rl::GetMonitorPosition( idx ); }
 
-    inline int get_refresh_rate( int idx )   { return rl::GetMonitorRefreshRate( idx ); }
+    inline int get_refresh_rate( int idx ) { return rl::GetMonitorRefreshRate( idx ); }
 
 }}
 

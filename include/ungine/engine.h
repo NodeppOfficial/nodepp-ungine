@@ -31,9 +31,42 @@ namespace ungine { namespace engine {
 
 namespace ungine { namespace engine {
 
-    bool is_ready() /*---*/ { return rl::IsWindowReady() || !locker.is_locked(); }
+    texture_t& get_default_texture() {
+        static texture_t out; if( texture::is_valid( out ) ){ return out; }
+        image_t img = rl::GenImageColor( 10, 10, rl::BLANK );
+        out = texture::load( img ); image::unload( img ); 
+        texture::set_filter( out, texture::FILTER::TEXTURE_FILTER_POINT );
+        return out;
+    }
 
-    bool  should_close() { return rl::WindowShouldClose(); }
+    shader_t& get_default_model_shader() {
+        static shader_t out = shader::load( 
+            kernel::vs_default_kernel(), 
+            kernel::fs_default_kernel() 
+        );  return out;
+    }
+
+    shader_t& get_default_canva_shader() {
+        static shader_t out = shader::load( 
+            kernel::cv_default_kernel(),
+            kernel::cf_default_kernel()
+        );  return out;
+    }
+
+    ptr_t<viewport_t>& get_active_viewport() {
+        static ptr_t<viewport_t> out ( 0UL );
+        return out; 
+    }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace engine {
+
+    bool is_ready() /*----*/ { return rl::IsWindowReady() || !locker.is_locked(); }
+
+    bool  should_close()     { return rl::WindowShouldClose(); }
 
     float get_delta() /*--*/ { return rl::GetFrameTime(); }
 
@@ -41,11 +74,14 @@ namespace ungine { namespace engine {
 
     int   get_fps() /*----*/ { return rl::GetFPS(); }
 
-    void close() {
+    void close() { 
         static bool b=0; if( b ){ return; } b=1;
         /*-----------*/ rl::CloseAudioDevice();
+        shader ::unload( get_default_canva_shader() );
+        shader ::unload( get_default_model_shader() );
+        texture::unload( get_default_texture     () );
         onClose.emit(); rl::CloseWindow(); 
-        onExit.emit (); process::exit(1);
+        onExit .emit(); process::exit(1);
     }
 
 }}
@@ -66,12 +102,14 @@ namespace ungine { namespace engine {
         process::add( coroutine::add( COROUTINE(){
         coBegin ; coWait( !is_ready() );
 
-            onOpen.emit(); while( !should_close() ){
+            onOpen.emit(); 
+            
+            while( !should_close() ){
 
                 coWait/*-*/( !is_ready() );
+                onNext.emit( /*-------*/ );
                 onLoop.emit( get_delta() );
                 onDraw.emit( /*-------*/ );
-                onNext.emit( /*-------*/ );
 
             coNext; } close();
 

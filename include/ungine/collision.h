@@ -88,29 +88,30 @@ namespace ungine { namespace collision {
     } else {
 
         float rmin=FLT_MAX; float rmax=-FLT_MAX;
-        mat_t transform = GetTransformMatrix( 
-            pos->translate.position, 
-            pos->translate.scale   , 
-            pos->translate.rotation 
-        );
 
-        for( int y=0; y<shp->model->get().meshCount; y++ ){
+        mat_t transform = rl::MatrixCompose( 
+            pos->translate.position, 
+        rl::QuaternionFromEuler( 
+            pos->rotation.x, pos->rotation.y, 
+            /*------------*/ pos->rotation.z
+        ),  pos->translate.scale );
+
+        for( int y=0; y<shp->model.meshCount; y++ ){
             
-            rl::Mesh mesh = shp->model->get().meshes[y];
+            rl::Mesh mesh = shp->model.meshes[y];
             int stride    = mesh.vertices ? 3 : 0;
             if( stride == 0 ){ continue; }
             
         for( int x=0; x<mesh.vertexCount; x++ ){
-             int baseIndex = x * stride;
-                
-            if( baseIndex + 2 >= mesh.vertexCount * stride ){ break; }
+             int baseIndex = x * stride;        
+        if ( baseIndex + 2 >= mesh.vertexCount * stride ){ break; }
                 
             vec3_t vertex = {
                 mesh.vertices[baseIndex + 0],
                 mesh.vertices[baseIndex + 1], 
                 mesh.vertices[baseIndex + 2]
             };
-                
+        
             vec3_t world_point = Vector3Transform (vertex, transform);
             float /*------*/ p = Vector3DotProduct(world_point, axis);
                 
@@ -261,7 +262,7 @@ namespace ungine { namespace collision {
         auto shp  = a.get_attribute<shape_2D_t>    ( "shape" );
 
     if( pos==nullptr || col==nullptr || shp == nullptr ){ break; }
-    if( col->mode & collision::MODE::COLLISION_MODE_BOX ){
+/*  if( col->mode & collision::MODE::COLLISION_MODE_BOX ){
 
         auto axes = get_2D_collision_axes( a ); if( axes.empty() ){ break; }
 
@@ -269,15 +270,26 @@ namespace ungine { namespace collision {
                   fabsf( Vector2DotProduct( axes[1], axis ) ) * pos->translate.scale.y ;
 
         float c = Vector2DotProduct( pos->translate.position, axis );
-        
         return ptr_t<float>({ c-r, c+r });
     
-    } else {
+    } else { 
+*/
 
         float rmin=FLT_MAX; float rmax=-FLT_MAX;
-        ptr_t<vec2_t> points = shp->points;
-
-        for( auto local_point: points ){
+            
+            rl::Mesh mesh = shp->model.meshes[0];
+            int stride    = mesh.vertices? 3 : 0;
+            if( stride == 0 ){ continue; }
+            
+        for( int x=0; x<mesh.vertexCount; x++ ){
+             int baseIndex = x * stride;
+        if ( baseIndex + 2 >= mesh.vertexCount * stride ){ break; }
+                
+            vec2_t local_point = {
+                mesh.vertices[baseIndex + 0],
+                mesh.vertices[baseIndex + 1]
+            //  mesh.vertices[baseIndex + 2]
+            };
 
             vec2_t scaled_point  = Vector2Multiply( local_point  , pos->translate.scale    );
             vec2_t rotated_point = Vector2Rotate  ( scaled_point , pos->translate.rotation );
@@ -288,7 +300,7 @@ namespace ungine { namespace collision {
             rmin = fminf( rmin,p ); rmax = fmaxf( rmax,p );
         }   return ptr_t<float>({ rmin, rmax });
 
-    }} while(0); return nullptr; }
+    }   while(0); return nullptr; }
 
     ptr_t<vec2_t> get_2D_collision_center( node_t a ) {
         auto pos = a.get_attribute<transform_2D_t>( "transform" );
@@ -380,131 +392,16 @@ namespace ungine { namespace collision {
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node {
-
-    node_t node_collision_line( function_t<void,ref_t<node_t>> clb ){
-    return node_line([=]( ref_t<node_t> self ){
-
-        auto tmp /**/ = collision_t();
-             tmp.mode = collision::MODE::COLLISION_MODE_2D |
-                        collision::MODE::COLLISION_MODE_RAY;
-             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
-        
-        self->set_attribute( "collision", tmp ); 
-
-        auto pos = self->get_attribute<transform_2D_t>( "transform"  );
-        auto shp = self->get_attribute<shape_2D_t>    ( "shape" );
-        
-             shp->mode = shape::MODE::SHAPE_MODE_NONE;
-             shp->color = rl::RED;
-
-    clb( self ); }); }
-
-    node_t node_collision_rectangle( function_t<void,ref_t<node_t>> clb ){
-    return node_rectangle([=]( ref_t<node_t> self ){
-
-        auto tmp /**/ = collision_t();
-             tmp.mode = collision::MODE::COLLISION_MODE_2D |
-                        collision::MODE::COLLISION_MODE_BOX;
-             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
-        
-        self->set_attribute( "collision", tmp ); 
-
-        auto pos = self->get_attribute<transform_2D_t>( "transform"  );
-        auto shp = self->get_attribute<shape_2D_t>    ( "shape" );
-        
-             shp->mode = shape::MODE::SHAPE_MODE_NONE;
-             shp->color = rl::RED;
-
-    clb( self ); }); }
-
-    node_t node_collision_circle( function_t<void,ref_t<node_t>> clb ){
-    return node_circle([=]( ref_t<node_t> self ){
-
-        auto tmp /**/ = collision_t();
-             tmp.mode = collision::MODE::COLLISION_MODE_2D |
-                        collision::MODE::COLLISION_MODE_SPH;
-             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
-        
-        self->set_attribute( "collision", tmp );
-
-        auto pos = self->get_attribute<transform_2D_t>( "transform"  );
-        auto shp = self->get_attribute<shape_2D_t>    ( "shape" );
-        
-             shp->mode = shape::MODE::SHAPE_MODE_VERTEX;
-             shp->color = rl::RED;
-
-    clb( self ); }); }
-    
-    /*─······································································─*/
-
-    node_t node_collision_ray( function_t<void,ref_t<node_t>> clb ){
-    return node_ray([=]( ref_t<node_t> self ){
-
-        auto tmp /**/ = collision_t();
-             tmp.mode = collision::MODE::COLLISION_MODE_3D |
-                        collision::MODE::COLLISION_MODE_RAY;
-             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
-        
-        self->set_attribute( "collision", tmp ); 
-
-        auto pos = self->get_attribute<transform_3D_t>( "transform"  );
-        auto shp = self->get_attribute<shape_3D_t>    ( "shape" );
-        
-             shp->mode = shape::MODE::SHAPE_MODE_NONE;
-             shp->color = rl::RED;
-
-    clb( self ); }); }
-
-    node_t node_collision_cube( function_t<void,ref_t<node_t>> clb ){
-    return node_cube([=]( ref_t<node_t> self ){
-
-        auto tmp /**/ = collision_t();
-             tmp.mode = collision::MODE::COLLISION_MODE_3D |
-                        collision::MODE::COLLISION_MODE_BOX;
-             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
-        
-        self->set_attribute( "collision", tmp ); 
-
-        auto pos = self->get_attribute<transform_3D_t>( "transform"  );
-        auto shp = self->get_attribute<shape_3D_t>    ( "shape" );
-        
-             shp->mode = shape::MODE::SHAPE_MODE_NONE;
-             shp->color = rl::RED;
-
-    clb( self ); }); }
-
-    node_t node_collision_sphere( function_t<void,ref_t<node_t>> clb ){
-    return node_sphere([=]( ref_t<node_t> self ){
-
-        auto tmp /**/ = collision_t();
-             tmp.mode = collision::MODE::COLLISION_MODE_3D |
-                        collision::MODE::COLLISION_MODE_SPH;
-             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
-        
-        self->set_attribute( "collision", tmp );
-
-        auto pos = self->get_attribute<transform_3D_t>( "transform"  );
-        auto shp = self->get_attribute<shape_3D_t>    ( "shape" );
-        
-             shp->mode = shape::MODE::SHAPE_MODE_NONE;
-             shp->color = rl::RED;
-        
-    clb( self ); }); }
-    
-}}
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-namespace ungine { namespace collision { void next( node_t a, node_t b ){
+namespace ungine { namespace collision { void check_collision( node_t a, node_t b ){
 
     auto mode = collision::MODE::COLLISION_MODE_2D | collision::MODE::COLLISION_MODE_3D;
 
     auto vis1 = a.get_attribute<visibility_t>( "visibility" );
     auto vis2 = b.get_attribute<visibility_t>( "visibility" );
-    auto col1 = a.get_attribute<collision_t> ( "collision"  );
-    auto col2 = b.get_attribute<collision_t> ( "collision"  );
+    auto col1 = a.get_attribute<collision_t> ( "collision" );
+    auto col2 = b.get_attribute<collision_t> ( "collision" );
 
+    if(( col1.null() || col2.null() )) /*-*/ { return; }
     if(( col1->mode & col2->mode & mode )==0){ return; }
     if(( col1->mask & col2->mask /*--*/ )==0){ return; }
 
@@ -531,6 +428,181 @@ namespace ungine { namespace collision { void next( node_t a, node_t b ){
     }
 
 }}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace node { void check_collision( void* x, queue_t<void*> queue ){
+
+    if( x==nullptr ){ return; } queue.map([=]( void* y ){
+
+        if( x==y ) /*------------*/ { return; }
+        node_t *X= type::cast<node_t>(x), 
+               *Y= type::cast<node_t>(y);
+        if( X->onCollision.empty() ){ return; }
+
+        collision::check_collision( *X,*Y );
+
+    });
+
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace node {
+
+    node_t node_collision_line( function_t<void,ptr_t<node_t>> clb ){
+    return node_line([=]( ptr_t<node_t> self ){
+
+        auto tmp /**/ = collision_t();
+             tmp.mode = collision::MODE::COLLISION_MODE_2D |
+                        collision::MODE::COLLISION_MODE_RAY;
+             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
+        
+        self->set_attribute( "collision", tmp ); 
+
+        auto pos = self->get_attribute<transform_2D_t>( "transform" );
+        auto shp = self->get_attribute<shape_2D_t>    ( "shape" );
+        shp->mode= shape::MODE::SHAPE_MODE_NONE;
+
+        auto vpt= self->get_root_viewport(); if( vpt!=nullptr ){
+             vpt->queue_collision.push( &self );
+
+        auto ID = vpt->queue_collision.last(); self->onClose([=]( node_t* ){
+            vpt->queue_collision.erase( ID );
+        }); }
+
+        self->onNext([=](){ node::check_collision( &self, vpt->queue_collision ); });
+
+    clb( self ); }); }
+
+    node_t node_collision_rectangle( function_t<void,ptr_t<node_t>> clb ){
+    return node_rectangle([=]( ptr_t<node_t> self ){
+
+        auto tmp /**/ = collision_t();
+             tmp.mode = collision::MODE::COLLISION_MODE_2D |
+                        collision::MODE::COLLISION_MODE_BOX;
+             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
+        
+        self->set_attribute( "collision", tmp ); 
+
+        auto pos = self->get_attribute<transform_2D_t>( "transform" );
+        auto shp = self->get_attribute<shape_2D_t>    ( "shape" );
+        shp->mode= shape::MODE::SHAPE_MODE_NONE;
+
+        auto vpt= self->get_root_viewport(); if( vpt!=nullptr ){
+             vpt->queue_collision.push( &self );
+
+        auto ID = vpt->queue_collision.last(); self->onClose([=]( node_t* ){
+            vpt->queue_collision.erase( ID );
+        }); }
+
+        self->onNext([=](){ node::check_collision( &self, vpt->queue_collision ); });
+
+    clb( self ); }); }
+
+    node_t node_collision_circle( function_t<void,ptr_t<node_t>> clb ){
+    return node_circle([=]( ptr_t<node_t> self ){
+
+        auto tmp /**/ = collision_t();
+             tmp.mode = collision::MODE::COLLISION_MODE_2D |
+                        collision::MODE::COLLISION_MODE_SPH;
+             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
+        
+        self->set_attribute( "collision", tmp );
+
+        auto pos = self->get_attribute<transform_2D_t>( "transform" );
+        auto shp = self->get_attribute<shape_2D_t>    ( "shape" );
+        shp->mode= shape::MODE::SHAPE_MODE_NONE;
+
+        auto vpt= self->get_root_viewport(); if( vpt!=nullptr ){
+             vpt->queue_collision.push( &self );
+
+        auto ID = vpt->queue_collision.last(); self->onClose([=]( node_t* ){
+             vpt->queue_collision.erase( ID );
+        }); }
+
+        self->onNext([=](){ node::check_collision( &self, vpt->queue_collision ); });
+
+    clb( self ); }); }
+    
+    /*─······································································─*/
+
+    node_t node_collision_ray( function_t<void,ptr_t<node_t>> clb ){
+    return node_ray([=]( ptr_t<node_t> self ){
+
+        auto tmp /**/ = collision_t();
+             tmp.mode = collision::MODE::COLLISION_MODE_3D |
+                        collision::MODE::COLLISION_MODE_RAY;
+             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
+        
+        self->set_attribute( "collision", tmp ); 
+
+        auto pos = self->get_attribute<transform_3D_t>( "transform" );
+        auto shp = self->get_attribute<shape_3D_t>    ( "shape" );
+        shp->mode= shape::MODE::SHAPE_MODE_NONE;
+
+        auto vpt= self->get_root_viewport(); if( vpt!=nullptr ){
+             vpt->queue_collision.push( &self );
+
+        auto ID = vpt->queue_collision.last(); self->onClose([=]( node_t* ){
+            vpt->queue_collision.erase( ID );
+        }); }
+
+        self->onNext([=](){ node::check_collision( &self, vpt->queue_collision ); });
+
+    clb( self ); }); }
+
+    node_t node_collision_cube( function_t<void,ptr_t<node_t>> clb ){
+    return node_cube([=]( ptr_t<node_t> self ){
+
+        auto tmp /**/ = collision_t();
+             tmp.mode = collision::MODE::COLLISION_MODE_3D |
+                        collision::MODE::COLLISION_MODE_BOX;
+             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
+        
+        self->set_attribute( "collision", tmp ); 
+
+        auto pos = self->get_attribute<transform_3D_t>( "transform" );
+        auto shp = self->get_attribute<shape_3D_t>    ( "shape" );
+        shp->mode= shape::MODE::SHAPE_MODE_NONE;
+
+        auto vpt= self->get_root_viewport(); if( vpt!=nullptr ){
+             vpt->queue_collision.push( &self );
+
+        auto ID = vpt->queue_collision.last(); self->onClose([=]( node_t* ){
+             vpt->queue_collision.erase( ID );
+        }); }
+
+        self->onNext([=](){ node::check_collision( &self, vpt->queue_collision ); });
+
+    clb( self ); }); }
+
+    node_t node_collision_sphere( function_t<void,ptr_t<node_t>> clb ){
+    return node_sphere([=]( ptr_t<node_t> self ){
+
+        auto tmp /**/ = collision_t();
+             tmp.mode = collision::MODE::COLLISION_MODE_3D |
+                        collision::MODE::COLLISION_MODE_SPH;
+             tmp.mask = collision::MASK::COLLISION_MASK_ALL;
+        
+        self->set_attribute( "collision", tmp );
+
+        auto pos = self->get_attribute<transform_3D_t>( "transform" );
+        auto shp = self->get_attribute<shape_3D_t>    ( "shape" );
+        shp->mode= shape::MODE::SHAPE_MODE_NONE;
+
+        auto vpt= self->get_root_viewport(); if( vpt!=nullptr ){
+             vpt->queue_collision.push( &self );
+
+        auto ID = vpt->queue_collision.last(); self->onClose([=]( node_t* ){
+             vpt->queue_collision.erase( ID );
+        }); }
+
+        self->onNext([=](){ node::check_collision( &self, vpt->queue_collision ); });
+        
+    clb( self ); }); }
+    
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

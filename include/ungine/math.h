@@ -1,4 +1,39 @@
-#pragma once
+/*
+ * Copyright 2023 The Ungine Project Authors. All Rights Reserved.
+ *
+ * Licensed under the MIT (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/UngineOfficial/Ungine/blob/main/LICENSE
+ */
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#ifndef UNGINE_MATH
+#define UNGINE_MATH
+ 
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace color {
+
+    color_t hex( string_t color ) {
+
+        regex_t reg ( "[A-F0-9]{2}", true );
+        auto data = reg.match_all( color );
+        uint size = max( data.size(),4UL );
+        uchar raw[4] = { 0, 0, 0, 255 }; color_t out; 
+
+        for( int x=0; x<size; x++ ){
+             raw[x] = encoder::hex::btoa<uchar>( data[x] );
+        }    memmove( &out, raw, sizeof( uchar ) * size );
+
+    return out; }
+
+    color_t rgb( uchar r, uchar g, uchar b, uchar a=255 ) {
+        return color_t({ r, g, b, a });
+    }
+
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
@@ -82,6 +117,16 @@ namespace ungine { namespace math { namespace matrix {
 
     mat_t rotation( vec3_t input ) {
         return rl::MatrixRotateXYZ( input );
+    }
+
+    mat_t from_transform_3D( transform_3D_t pos ) {
+        return rl::MatrixCompose( 
+            pos.translate.position  , 
+        rl::QuaternionFromEuler( 
+            pos.translate.rotation.x, 
+            pos.translate.rotation.y, 
+            pos.translate.rotation.z
+        ),  pos.translate.scale );
     }
 
 }}}
@@ -389,5 +434,9 @@ namespace ungine { namespace math {
     return value; }
 
 }}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#endif
 
 /*────────────────────────────────────────────────────────────────────────────*/

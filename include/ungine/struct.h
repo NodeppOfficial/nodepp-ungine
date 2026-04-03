@@ -12,6 +12,26 @@
 #ifndef UNGINE_STRUCT
 #define UNGINE_STRUCT
 
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace cursor { enum MODE {
+
+    MODE_CURSOR_DEFAULT       = 0, // Default pointer shape
+    MODE_CURSOR_ARROW         = 1, // Arrow shape
+    MODE_CURSOR_IBEAM         = 2, // Text writing cursor shape
+    MODE_CURSOR_CROSSHAIR     = 3, // Cross shape
+    MODE_CURSOR_POINTING_HAND = 4, // Pointing hand cursor
+    MODE_CURSOR_RESIZE_EW     = 5, // Horizontal resize/move arrow shape
+    MODE_CURSOR_RESIZE_NS     = 6, // Vertical resize/move arrow shape
+    MODE_CURSOR_RESIZE_NWSE   = 7, // Top-left to bottom-right diagonal resize/move arrow shape
+    MODE_CURSOR_RESIZE_NESW   = 8, // The top-right to bottom-left diagonal resize/move arrow shape
+    MODE_CURSOR_RESIZE_ALL    = 9, // The omnidirectional resize/move cursor shape
+    MODE_CURSOR_NOT_ALLOWED   = 10 // The operation-not-allowed shape
+
+};}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 namespace ungine { namespace key { enum BUTTON {
     KEY_NULL            = 0,        // Key: NULL, used for no key pressed
     // Alphanumeric keys
@@ -145,14 +165,14 @@ namespace ungine { namespace mouse { enum BUTTON {
 
 namespace ungine { namespace blend { enum MODE {
 
-    BLEND_ALPHA= 0,           // Blend textures considering alpha (default)
-    BLEND_ADDITIVE,           // Blend textures adding colors
-    BLEND_MULTIPLIED,         // Blend textures multiplying colors
-    BLEND_ADD_COLORS,         // Blend textures adding colors (alternative)
-    BLEND_SUBTRACT_COLORS,    // Blend textures subtracting colors (alternative)
-    BLEND_ALPHA_PREMULTIPLY,  // Blend premultiplied textures considering alpha
-    BLEND_CUSTOM,             // Blend textures using custom src/dst factors (use rlSetBlendFactors())
-    BLEND_CUSTOM_SEPARATE     // Blend textures using custom rgb/alpha separate src/dst factors (use rlSetBlendFactorsSeparate())
+    BLEND_MODE_ALPHA= 0,           // Blend textures considering alpha (default)
+    BLEND_MODE_ADDITIVE,           // Blend textures adding colors
+    BLEND_MODE_MULTIPLIED,         // Blend textures multiplying colors
+    BLEND_MODE_ADD_COLORS,         // Blend textures adding colors (alternative)
+    BLEND_MODE_SUBTRACT_COLORS,    // Blend textures subtracting colors (alternative)
+    BLEND_MODE_ALPHA_PREMULTIPLY,  // Blend premultiplied textures considering alpha
+    BLEND_MODE_CUSTOM,             // Blend textures using custom src/dst factors (use rlSetBlendFactors())
+    BLEND_MODE_CUSTOM_SEPARATE     // Blend textures using custom rgb/alpha separate src/dst factors (use rlSetBlendFactorsSeparate())
 
 };}}
 
@@ -342,23 +362,138 @@ namespace ungine { namespace visibility { enum MASK {
 
 };}}
 
+namespace ungine { namespace light { enum MODE {
+
+    LIGHT_MODE_NONE       = 0x00,
+    LIGHT_MODE_POINT      = 0x01,
+    LIGHT_MODE_AREA       = 0x02,
+    LIGHT_MODE_AMBIENT    = 0x03,
+    LIGHT_MODE_SPOT       = 0x04,
+    LIGHT_MODE_SUN        = 0x05,
+
+};}}
+
+namespace ungine { namespace sound { enum MODE {
+
+    SOUND_MODE_NONE = 0b00000000,
+    SOUND_MODE_ONCE = 0b00000010,
+    SOUND_MODE_PLAY = 0b00000001,
+
+};}}
+
+namespace ungine { namespace animation { enum MODE {
+
+    ANIMATION_MODE_NONE    = 0b00000000,
+    ANIMATION_MODE_REVERSE = 0b00000010,
+    ANIMATION_MODE_PLAY    = 0b00000001,
+
+};}}
+
+namespace ungine { namespace stencil { enum MASK {
+
+    STENCIL_MASK_NONE = 0b00000000,
+    STENCIL_MASK_1    = 0b00000001,
+    STENCIL_MASK_2    = 0b00000010,
+    STENCIL_MASK_3    = 0b00000100,
+    STENCIL_MASK_4    = 0b00001000,
+    STENCIL_MASK_5    = 0b00010000,
+    STENCIL_MASK_6    = 0b00100000,
+    STENCIL_MASK_7    = 0b01000000,
+    STENCIL_MASK_8    = 0b10000000,
+
+};}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { struct visibility_t {
+    int mode = visibility::MODE::VISIBILITY_MODE_ON ;
+    int mask = visibility::MASK::VISIBILITY_MASK_ALL;
+};}
+
+namespace ungine { struct collision_t {
+    int mode = collision::MODE::COLLISION_MODE_NONE;
+    int mask = collision::MASK::COLLISION_MASK_ALL ;
+};}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace rl { struct GBufferRenderTexture {
+    uint /*----*/ id ;
+    Texture albedo   ;
+    Texture material ;
+    Texture depthness;
+    int width, height, depth;
+}; }}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { struct camera_3D_t {
+    float       fovy, far=500.f, near=0.1f, fog;
+    rl::Vector3 position, target, up;
+    int         projection;
+}; }
+
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine {
 
-    using color_t     = rl::Color;
-
-    using mat_t       = rl::Matrix; 
-    using vec2_t      = rl::Vector2;
-    using vec3_t      = rl::Vector3;
-    using vec4_t      = rl::Vector4;
-    using rect_t      = rl::Rectangle;
+    using color_t = rl::Color;
+    using mat_t   = rl::Matrix; 
+    using vec2_t  = rl::Vector2;
+    using vec3_t  = rl::Vector3;
+    using vec4_t  = rl::Vector4;
+    using rect_t  = rl::Rectangle;
 
 }
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine {
+    using texture_t   = rl::Texture;
+    using shader_t    = rl::Shader;
+    using model_t     = rl::Model;
+    using image_t     = rl::Image;
+    using sound_t     = rl::Sound;
+    using music_t     = rl::Music;
+    using mesh_t      = rl::Mesh;
+    using material_t  = rl::Material;
+    using camera_2D_t = rl::Camera2D; 
+    using animation_t = rl::ModelAnimation;
+    using render_t    = rl::GBufferRenderTexture;
+}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { struct animation_frame_t {
+    animation_t* animations;
+    uint  count, mode ;
+    uint  frame, index;
+    uint  step ;
+}; }
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { struct shape_2D_t {
+    int mode /**/ = shape::MODE::SHAPE_MODE_FACES;
+    color_t color = rl::WHITE; model_t model;
+    rect_t sprite ;
+};}
+
+namespace ungine { struct shape_3D_t {
+    int mode /**/ = shape::MODE::SHAPE_MODE_FACES;
+    color_t color = rl::WHITE; model_t model;
+    animation_frame_t animation;
+};}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine {
+
+    struct matrix_t {
+        texture_t  texture;
+        uchar*     data; 
+        int width, height, depth;
+    };
 
     struct bvec2_t { bool  x; bool y; };
     struct ivec2_t {  int  x;  int y; };
@@ -372,15 +507,14 @@ namespace ungine {
     struct ivec4_t {  int  x;  int y;  int z;  int w; };
     struct uvec4_t { uint  x; uint y; uint z; uint w; };
 
+    struct light_t {
+        color_t color  = color_t({ 255, 255, 255, 255 });
+        float   wrap   = PI / 4; 
+        float   energy = 100.f;
+        int     mode   = light::MODE::LIGHT_MODE_POINT;
+    };
+
 }
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-namespace ungine { struct camera_3D_t {
-    float  fovy, far=500.f, near=0.1f;
-    vec3_t position, target, up;
-    int    projection;
-}; }
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
@@ -414,27 +548,33 @@ namespace ungine { struct transform_2D_t {
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { struct visibility_t {
-    int mode = visibility::MODE::VISIBILITY_MODE_ON ;
-    int mask = visibility::MASK::VISIBILITY_MASK_ALL;
-};}
-
-namespace ungine { struct collision_t {
-    int mode = collision::MODE::COLLISION_MODE_NONE;
-    int mask = collision::MASK::COLLISION_MASK_ALL ;
-};}
-
 namespace ungine { struct render_queue_t {
     queue_t<event_t<>> event3D;
     queue_t<event_t<>> event2D;
     queue_t<event_t<>> eventUI;
+    queue_t<event_t<>> eventU2D;
+    queue_t<event_t<>> eventU3D;
+    queue_t<event_t<>> eventUUI;
 };}
 
-namespace ungine {
-    using camera_2D_t    = rl::Camera2D; 
-    using transform_UI_t = transform_2D_t; 
-    using render_2D_t    = rl::RenderTexture;
-}
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { struct viewport_t {
+    
+    int mask = visibility::MASK::VISIBILITY_MASK_ALL;
+    int mode = visibility::MODE::VISIBILITY_MODE_ON ;
+
+    color_t background={ 0, 0, 0, 255 };
+    queue_t<void*>     queue_collision;
+    queue_t<void*>     queue_light;
+
+    ptr_t<camera_2D_t> camera2D; 
+    ptr_t<camera_3D_t> camera3D;
+    ptr_t<render_t>    render  ;
+
+    matrix_t           matrix  ;
+
+};}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

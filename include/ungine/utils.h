@@ -59,38 +59,169 @@ rl::RayCollision collision = { 0 };
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace rl {
-Matrix GetTransformMatrix( vec3_t position, vec3_t scale, vec3_t rotation ) {
-Matrix mat = {0};
-    
-    // Initialize Vectors
-    vec4_t q_rotation = QuaternionFromEuler( 
-           rotation.x, rotation.y, rotation.z
+
+    uint& GetRenderLayer() {
+        static uint layer; return layer; 
+    }
+
+    void SetRenderLayer( uint layer ){
+        uint* raw = &GetRenderLayer();
+        *raw = layer;
+    }
+
+    void ClearRenderLayer() { SetRenderLayer(0); }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace rl { 
+void BeginTextureMode( GBufferRenderTexture target, int layer ) {
+
+    rlDrawRenderBatchActive(/*-*/);      
+    rlEnableFramebuffer(target.id); 
+    rlViewport( 
+        0 /*------*/, target.height * layer,
+        target.width, target.height
     );
-
-    //Initialize Vectors
-    Vector3 right   = { 1, 0, 0 };
-    Vector3 up      = { 0, 1, 0 };
-    Vector3 forward = { 0, 0, 1 };
-
-    //Scale Vectors
-    right   = Vector3Scale( right   , scale.x  );
-    up      = Vector3Scale( up      , scale.y  );
-    forward = Vector3Scale( forward , scale.z  );
-
-    //Rotate Vectors
-    right   = Vector3RotateByQuaternion( right  , q_rotation );
-    up      = Vector3RotateByQuaternion( up     , q_rotation );
-    forward = Vector3RotateByQuaternion( forward, q_rotation );
     
-    // Set matrix output
-	Matrix matrix_out = {
-		right.x, up.x, forward.x, position.x,
-		right.y, up.y, forward.y, position.y,
-		right.z, up.z, forward.z, position.z,
-		      0,    0,         0,          1
-	};
+    SetRenderLayer( layer );
 
-return matrix_out; }}}
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace rl {     
+bool IsGBufferValid( GBufferRenderTexture target ) {
+
+    if( target.id == 0 ) /*--------------*/ { return false; }
+    if( !IsTextureValid( target.albedo   ) ){ return false; }
+    if( !IsTextureValid( target.depthness) ){ return false; }
+
+return true; }
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace rl {     
+void UnloadGBuffer( const GBufferRenderTexture& target ) {
+
+    if( target.id == 0 ){ return; }
+ 
+    if( IsTextureValid ( target.albedo       )  )
+      { rlUnloadTexture( target.albedo   .id ); }
+    if( IsTextureValid ( target.depthness    )  )
+      { rlUnloadTexture( target.depthness.id ); }
+
+    rlUnloadFramebuffer( target.id );
+
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace rl {     
+GBufferRenderTexture LoadGBuffer( int width, int height, int depth ) {
+    
+    GBufferRenderTexture target={0}; 
+    target.id = rlLoadFramebuffer();
+
+    if( target.id>0 ) {
+
+        rlEnableFramebuffer(target.id);
+        int format = image::FORMAT::FORMAT_UNCOMPRESSED_R8G8B8A8;
+
+        target.width = width ;
+        target.height= height;
+        target.depth = depth ;
+
+        target.albedo    = Texture2D({
+            rlLoadTexture( NULL, width, height * depth, format, 1 ),
+            width, height * depth, 1, format
+        });
+
+        target.depthness = Texture2D({
+            rlLoadTextureDepth( width, height * depth, true),
+            width, height * depth, 1, 19
+        });
+
+        rlActiveDrawBuffers(1);
+        
+        rlFramebufferAttach(target.id, target.albedo   .id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D   , 0);
+        rlFramebufferAttach(target.id, target.depthness.id, RL_ATTACHMENT_DEPTH         , RL_ATTACHMENT_RENDERBUFFER, 0);
+
+    if( rlFramebufferComplete(target.id) ){ 
+        TRACELOG(LOG_INFO, "FBO: [ID %i] Framebuffer object created successfully", target.id);
+    }
+
+        rlDisableFramebuffer();
+    } else { TRACELOG(LOG_WARNING, "FBO: Framebuffer object can not be created"); }
+
+    return target;
+}}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace rl { 
+    
+    Mesh GenMeshRaw( int pointCount, const Vector3* vertices, const Vector2* texCoords, const ushort* indices ) {
+         
+        Mesh mesh          = { 0 };
+        mesh.triangleCount = pointCount-2; 
+        mesh.vertexCount   = pointCount*1;
+
+        if( vertices  ){ 
+            mesh.vertices  = /*--*/ (float*)RL_MALLOC( mesh.vertexCount* 3* sizeof(float));
+            memcpy( mesh.vertices , (float*)vertices,  mesh.vertexCount* 3* sizeof(float)); 
+        } else { mesh.vertices = nullptr; }
+        
+        if( texCoords ){ 
+            mesh.texcoords = /*--*/ (float*)RL_MALLOC( mesh.vertexCount* 2* sizeof(float));
+            memcpy( mesh.texcoords, (float*)texCoords, mesh.vertexCount* 2* sizeof(float)); 
+        } else { mesh.texcoords = nullptr; }
+
+        if( indices   ){ 
+            mesh.indices  = (ushort*)RL_MALLOC( mesh.triangleCount* 3* sizeof(ushort));
+            memcpy( mesh.indices  , indices   , mesh.triangleCount* 3* sizeof(ushort)); 
+        } else { mesh.indices = nullptr; }
+
+        UploadMesh( &mesh, false ); 
+        return mesh;
+
+    }
+
+    void DrawPolygon( ptr_t<Vector2> points, ptr_t<Vector2> coords, Color color ){
+
+        if( points.size() >= 3 && points.size() == coords.size() ) {
+        rlSetTexture( GetShapesTexture().id );
+            
+            Rectangle shapeRect = GetShapesTextureRectangle();
+            Texture2D texShapes = GetShapesTexture();
+
+        rlBegin(RL_QUADS);
+
+            rlColor4ub( color.r, color.g, color.b, color.a );
+
+        for( int i=1; i<points.size()-1; i++ ){
+
+            rlTexCoord2f(coords[0].x*.5+.5  , coords[0].y*.5+.5 );
+            rlVertex2f  (points[0].x        , points[0].y );
+
+            rlTexCoord2f(coords[i].x*.5+.5  , coords[i].y*.5+.5 );
+            rlVertex2f  (points[i].x        , points[i].y );
+
+            rlTexCoord2f(coords[i+1].x*.5+.5, coords[i+1].y*.5+.5 );
+            rlVertex2f  (points[i+1].x      , points[i+1].y );
+
+            rlTexCoord2f(coords[0].x*.5+.5  , coords[0].y*.5+.5 );
+            rlVertex2f  (points[0].x        , points[0].y );
+
+        }
+
+        rlEnd(); rlSetTexture(0);
+
+    }}
+
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

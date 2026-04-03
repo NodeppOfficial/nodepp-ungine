@@ -14,177 +14,194 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace render {
+namespace ungine { namespace scissor {
+    void begin( rect_t rec ){ rl::BeginScissorMode( rec.x, rec.y, rec.width, rec.height ); }
+    void end  () /*------*/ { rl::EndScissorMode  (); }
+}}
 
-    void emit_scissor( rect_t scissor, function_t<void> callback ) {
-         rl::BeginScissorMode( scissor.x, scissor.y, scissor.width, scissor.height );
-         callback(); rl::EndScissorMode(); /*-------------------------------------*/
-    }
+/*────────────────────────────────────────────────────────────────────────────*/
 
-    void emit_render( render_2D_t render, function_t<void> callback ) {
-         rl::BeginTextureMode( render ); callback();
-         rl::EndTextureMode  (); /*---------------*/
-    }
+namespace ungine { namespace blend {
+    void begin   ( uint blend_mode ){ rl::BeginBlendMode( blend_mode ); }
+    void end     () /*-----------*/ { rl::EndBlendMode  (); }
+}}
 
-    void emit_shader( const shader_t* shader, function_t<void> callback ) {
-         if( shader == nullptr || !shader->is_valid() ){ return; }
-         rl::BeginShaderMode( shader->get() ); 
-         shader->next(); callback();
-         rl::EndShaderMode();
-    }
+/*────────────────────────────────────────────────────────────────────────────*/
 
-    void emit_blend( uint blend_mode, function_t<void> callback ) {
-         rl::BeginBlendMode( blend_mode ); callback();
-         rl::EndBlendMode  (); /*-------------------*/
-    }
-
-    void emit_2D( camera_2D_t* cam, function_t<void> callback ) {
-         if( cam == nullptr ){ return; }
-         rl::BeginMode2D( *cam ); callback();
-         rl::EndMode2D  (); /*-------------*/
-    }
-
-    void emit_3D( camera_3D_t* cam, function_t<void> callback ) {
-         if( cam == nullptr ){ return; }
-         rl::BeginMode3D( *cam ); callback();
-         rl::EndMode3D  (); /*-------------*/
-    }
-
-    void emit_vr( vr_t* device, function_t<void> callback ) {
-         if( device == nullptr /*--------------*/ ){ return; }
-         rl::BeginVrStereoMode( device->device() ); callback();
-         rl::EndVrStereoMode  (); /*-------------------------*/
-    }
-
-    void emit( function_t<void> callback ) {
-         rl::BeginDrawing(); callback();
-         rl::EndDrawing  (); /*-------*/
-    }
-
+namespace ungine { namespace draw {
+    void begin() { rl::BeginDrawing(); }
+    void end  () { rl::EndDrawing  (); }
 }}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace node { 
-node_t node_render( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
+node_t node_render( function_t<void,ptr_t<node_t>> clb ) {
+return node::node_rectangle( [=]( ptr_t<node_t> self ){
 
-    auto rnd   = type::bind( render_t() ); 
-    auto tmp   = viewport_t();
-    tmp.render = type::bind( rnd );
-
-    self->set_attribute( "type"    , "Render" );
-    self->set_attribute( "vr"      , vr_t() );
-    self->set_attribute( "viewport", tmp );
+    auto rnd = ptr_t<render_t>({ render::load(1), render::load(7) });
+    auto shp = self->get_attribute<shape_2D_t>( "shape" );
+    auto mtx = matrix::load( 512, 4, 4 );
+    auto stm = ptr_t<float>( 0UL, 0.0f );
+    auto tmp = viewport_t(); 
+         tmp.render = rnd; 
+         tmp.matrix = mtx;
     
-    self->onDraw([=](){
+    shp->model.materials[0].shader /*-----*/ = engine::get_default_canva_shader();
+    shp->model.materials[0].maps[rl::MATERIAL_MAP_ALBEDO].texture = rnd[0].albedo;
+    shp->model.materials[0].maps[rl::MATERIAL_MAP_NORMAL].texture = rnd[1].albedo;
+    shp->model.materials[0].maps[rl::MATERIAL_MAP_BRDF  ].texture = mtx.texture  ;
 
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-        auto vrr = self->get_attribute<vr_t>( "vr" );
-        auto que = self->get_render_queue();
+    self->set_attribute( "viewport", tmp ); self->on2D.clear();
+    auto  vpt = self->get_attribute<viewport_t>( "viewport" );
 
-    render::emit_render( vpt->render->get(), [&](){
+    self->onNext([=](){
+        auto &tmp = engine::get_active_viewport(); tmp = vpt;
+    }); self->onNext.emit();
 
-        if( vpt->mode & visibility::MODE::VISIBILITY_MODE_VR && vrr != nullptr
-        ) { rl::BeginVrStereoMode( vrr->device() ); }
-            rl::ClearBackground( vpt->background );
+    self->onClose([=]( node_t* ){ for( auto x: rnd ){ 
+        render::unload(x); 
+    }   matrix::unload( mtx ); }); 
 
-            if( !que->event3D.empty() && !vpt->camera3D.null() ){
-            render::emit_3D( &vpt->camera3D, [&](){
+    if( &vpt == self->get_root_viewport() ){
+    self->onNext.add( coroutine::add( COROUTINE(){
+    coBegin ; coWait( vpt->camera3D.null() );
 
-                auto x=que->event3D.first(); while( x!=nullptr ){
-                auto y=x->next; x->data.emit(); x=y; }
+        do{ vec3_t frw = vpt->camera3D->position - vpt->camera3D->target;
+            float d = engine::get_delta(); *stm += d;
+            int   x = 0, y = 0; auto mtx = vpt->matrix;
 
-            }); }
+            matrix::set_pixel_float( mtx, 3, 0, 0, vpt->camera3D->position.x );
+            matrix::set_pixel_float( mtx, 3, 0, 1, vpt->camera3D->position.y );
+            matrix::set_pixel_float( mtx, 3, 0, 2, vpt->camera3D->position.z );
+            matrix::set_pixel_float( mtx, 3, 0, 3, vpt->camera3D->fog  );
 
-            if( !que->event2D.empty() && !vpt->camera2D.null() ){
-            render::emit_2D( &vpt->camera2D, [&](){
+            matrix::set_pixel_float( mtx, 2, 0, 0,*stm );
+            matrix::set_pixel_float( mtx, 1, 0, 0, d   );
 
-                auto x=que->event2D.first(); while( x!=nullptr ){
-                auto y=x->next; x->data.emit(); x=y; }
+            matrix::set_pixel_float( mtx, 4, 0, 0, frw.x );
+            matrix::set_pixel_float( mtx, 4, 0, 1, frw.y );
+            matrix::set_pixel_float( mtx, 4, 0, 2, frw.z );
 
-            }); } else {
-
-                auto x=que->event2D.first(); while( x!=nullptr ){
-                auto y=x->next; x->data.emit(); x=y; }
-
-            }
+            matrix::set_pixel_float( mtx, 5, 0, 0, vpt->camera3D->near );
+            matrix::set_pixel_float( mtx, 5, 0, 1, vpt->camera3D->far  );
+            matrix::set_pixel_float( mtx, 5, 0, 2, vpt->camera3D->fovy );
             
-            if( !que->eventUI.empty() ){
+        } while(0); coGoto(0);
+        
+    coFinish })); }
 
-                auto x=que->eventUI.first(); while( x!=nullptr ){
-                auto y=x->next; x->data.emit(); x=y; }
+    self->onDraw ([=](){
 
-            }
+        auto vpt = self->get_attribute<viewport_t>( "viewport" );
+        auto que = self->get_render_queue();
+        auto mtx = vpt->matrix;
 
-        if( vrr != nullptr && ( vpt->mode & visibility::MODE::VISIBILITY_MODE_VR ) 
-        ) { rl::EndVrStereoMode(); } 
+    for( int x=0; x<=vpt->render[1].depth; x++ ){
 
-    }); }); clb( self ); 
+        do{ matrix::set_pixel_float( mtx, 0, 0, 0, (float) x );
+            matrix::update( mtx );
+        } while(0);
+
+        if ( x==0 ){ 
+            render::begin( vpt->render[0], x );
+            rl::ClearBackground( rl::BLANK );
+        } else { int y = x-1;
+            render::begin( vpt->render[1], y );
+        if ( y==0 ){ 
+            rl::ClearBackground( rl::BLANK ); 
+        }}
+
+        if( x==7 ){ 
+            rl::rlEnableDepthTest(); 
+            rl::rlEnableDepthMask();
+        }
+
+        if( !vpt->camera3D.null() ){ do {
+        cam3D::begin( *vpt->camera3D );
+
+            auto w=que->eventU3D.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->event3D.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0); cam3D::end(); }
+
+        if( !vpt->camera2D.null() ){ do {
+        cam2D::begin( *vpt->camera2D );
+
+            auto w=que->eventU2D.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->event2D.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0); cam2D::end(); } else { do {
+
+            auto w=que->eventU2D.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->event2D.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0); } do {
+
+            auto w=que->eventUUI.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->eventUI.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0);
+
+    render::end(); }}); clb( self ); 
 
 }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace node {
-node_t node_scene( function_t<void,ref_t<node_t>> clb ) {
-return node_render([=]( ref_t<node_t> self ){
-
-    shader_t shader;
-             shader.set_fragment_shader( kernel::cv_default_kernel() );         
-    if( shader.compile()==-1 ) /**/ { throw except_t( "error shader" ); }
-
-    self->onNext([=](){ auto root = self->get_root();
-
-        queue_t<node_t*> collision_list;
-
-        root->child_iterator([=]( node_t* node ){
-
-            if( !node->has_attribute( "visibility" ) ){ return true; }
-            auto vis = node->get_attribute<visibility_t>("visibility");
-            if ( vis->mode==0x00 || vis->mask==0x00 ){ return false; }
-            if ( !node->has_attribute("collision")  ){ return true ; }
-
-            /*---------------------------*/ collision_list.push( node );
-        return true; }, true ); auto data = collision_list.data();
-
-        for( auto x:data ) { for( auto y:data ) {
-        if ( x == y ) /*----------*/ { continue; }
-        if ( x->onCollision.empty() ){ continue; }
-        collision::next( *x,*y ); }}
-        
-    });
+node_t node_scene( function_t<void,ptr_t<node_t>> clb ) {
+return node_render([=]( ptr_t<node_t> self ){
 
     self->onDraw([=](){
 
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-        auto shd = self->get_attribute<shader_t>( "shader" );
-        auto vrr = self->get_attribute<vr_t>    ( "vr" );
-        auto bvr =( vpt->mode&visibility::MODE::VISIBILITY_MODE_VR ) ? true : false;
+        auto pos = self->get_attribute<transform_2D_t>( "transform" );
+        auto vpt = self->get_attribute<viewport_t>( "viewport" );
+        auto shp = self->get_attribute<shape_2D_t>( "shape" );
+        auto mtx = vpt ->matrix;
+      
+        draw::begin(); rl::ClearBackground( vpt->background );
 
-    if( shd != nullptr && shd->is_valid() ){ 
-        shd->append_uniform( "screen", vpt->render->get_texture() ); 
-        shd->append_uniform( "depth" , vpt->render->get_depth  () ); 
-        shd->append_uniform( "vrMode", (int) bvr );
-    }
+        blend::begin( blend::MODE::BLEND_MODE_ALPHA );
+        model::draw( shp->model, *pos, shp->color, shp->mode );
+        matrix::clear( mtx );
+        blend::end();
 
-    render::emit([&](){ 
-
-        if( vpt->render.null() )/**/{ return; }
-        if( shd != nullptr && shd->is_valid() )
-          { rl::BeginShaderMode( shd->get() ); shd->next(); }
-            
-            auto txt = vpt->render->get_texture(); rl::ClearBackground( rl::BLANK );
-            auto src = rect_t({ 0, 0, type::cast<float>( txt.width ), type::cast<float>(-txt.height ) });
-            auto dst = rect_t({ 0, 0, type::cast<float>( txt.width ), type::cast<float>( txt.height ) });
-
-            rl::DrawTexturePro ( txt, src, dst, vec2_t({ 0, 0 }), .0f, rl::WHITE );
-
-        if( shd != nullptr && shd->is_valid() ){ rl::EndShaderMode(); } 
-
-    }); }); 
-    
-    self->set_attribute( "shader", shader ); clb( self );
+        blend::begin( blend::MODE::BLEND_MODE_ALPHA );
+        rl::DrawTexturePro( 
+            vpt->render[0].albedo,
+            rect_t({ 
+                0, 0, (float) vpt->render[0].albedo.width ,
+                      (float)-vpt->render[0].albedo.height,
+            }), 
+            rect_t({ 
+                0, 0, (float) window::get_size().x,
+                      (float) window::get_size().y,
+            }), 
+        vec2_t({ 0, 0 }), .0f, rl::WHITE );
+        blend::end();
+        
+    draw::end(); }); clb( self );
  
 }); }}}
 

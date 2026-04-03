@@ -19,6 +19,7 @@
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #include <nodepp/nodepp.h>
+#include <nodepp/encoder.h>
 #include <nodepp/object.h>
 #include <nodepp/event.h>
 #include <nodepp/timer.h>
@@ -48,21 +49,20 @@ namespace ungine { namespace rl {
 #include "lock.h"
 #include "math.h"
 #include "struct.h"
-
-#include "texture.h"
-#include "model.h"
-#include "image.h"
-#include "sound.h"
-#include "mesh.h"
-#include "gui.h"
-#include "vr.h"
-#include "render.h"
+#include "matrix.h"
+#include "kernel.h"
 #include "shader.h"
 
-#include "kernel.h"
-#include "window.h"
+#include "texture.h"
+#include "sound.h"
+#include "image.h"
+#include "render.h"
+
 #include "engine.h"
+#include "window.h"
 #include "input.h"
+#include "model.h"
+#include "animation.h"
 
 #include "node.h"
 #include "shape.h"

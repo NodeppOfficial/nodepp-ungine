@@ -17,7 +17,7 @@
 namespace ungine { class lock_t : public global_t {
 protected:
 
-    struct NODE { atomic_t<int> value = 0; }; ptr_t<NODE> obj;
+    struct NODE { int value = 0; }; ptr_t<NODE> obj;
 
 public:
 
@@ -27,7 +27,7 @@ public:
     void      lock() const noexcept { ++obj->value; }
     void    unlock() const noexcept { --obj->value; }
 
-    bool is_locked() const noexcept { return obj->value.get() != 0; }
+    bool is_locked() const noexcept { return obj->value != 0; }
 
 };}
 

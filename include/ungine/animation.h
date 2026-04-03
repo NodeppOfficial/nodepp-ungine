@@ -9,51 +9,44 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef UNGINE_GLOBAL
-#define UNGINE_GLOBAL
+#ifndef UNGINE_ANIMATION
+#define UNGINE_ANIMATION
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class global_t {
-protected:
+namespace ungine { namespace animation {
 
-    struct ATTR { object_t obj; }; ptr_t<ATTR> attr;
-
-public:
-
-    global_t() noexcept : attr( new ATTR() ){}
-   ~global_t() noexcept { /*--------------*/ }
-
-    /*─······································································─*/
-
-    bool has_attribute   ( string_t name ) const noexcept { return attr->obj.has(name); }
-
-    void remove_attribute( string_t name ) const noexcept { attr->obj.erase( name ); }
-
-    /*─······································································─*/
-
-    void set_attribute( string_t name, const char* value ) const noexcept {
-        attr->obj[ name ] = type::bind( string::to_string( value ) ); 
+    animation_frame_t load( string_t path ){
+        int /**/ count = 0; animation_frame_t out = {};
+        out.animations = rl::LoadModelAnimations( path.get(), &count );
+        out.count /**/ = count; return out;
     }
 
-    template< class T >
-    void set_attribute( string_t name, T value ) const noexcept {
-        attr->obj[ name ] = type::bind( value );
+    /*─······································································─*/
+
+    bool is_valid( const model_t& model, animation_frame_t anim ) {
+         if( anim.animations==nullptr || anim.count==0 )
+           { return false; } 
+         uint index = anim.index % anim.count;
+         animation_t addr = anim.animations[ index ]; 
+         return rl::IsModelAnimationValid( model, addr ); 
     }
 
-    void clear() const noexcept { attr->obj.clear(); }
+    void update( const model_t& model, animation_frame_t anim ) {
+         if( !is_valid( model, anim ) ){ return; }
+         uint index = anim.index % anim.count;
+         animation_t addr = anim.animations[index];
+         uint frame = anim.frame % addr.frameCount;
+         rl::UpdateModelAnimation( model, addr, frame );
+    }
 
     /*─······································································─*/
 
-    template< class T >
-    ptr_t<T> get_attribute( string_t name ) const { try {
+    int unload( animation_frame_t anim ){ 
+        rl::UnloadModelAnimations( anim.animations, anim.count );
+    return 1; }
 
-        if( !attr->obj.has( name ) ){ return nullptr; }
-        return attr->obj[ name ].as<ptr_t<T>>();
-
-    } catch( except_t err ) { return nullptr; }}
-
-};}
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

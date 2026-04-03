@@ -14,116 +14,77 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class texture_t : public global_t {
-protected:
+namespace ungine { namespace texture {
 
-    struct NODE { rl::Texture2D txt; char filter=-1; }; ptr_t<NODE> obj;
+    texture_t load( const image_t& image ){ return rl::LoadTextureFromImage( image ); }
 
-public:
+    bool is_valid( const texture_t& texture ) { return rl::IsTextureValid( texture ); }
 
-    texture_t() noexcept : global_t(), obj( new NODE() ){ /*---*/ }
-   ~texture_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+    texture_t load( string_t path ) { return rl::LoadTexture( path.get() ); }
 
     /*─······································································─*/
-
-    texture_t( rl::Texture2D texture ) noexcept : global_t(), obj( new NODE() ) { obj->txt = texture; }
 
     template< class T >
-    texture_t( T& file, string_t ext ) noexcept : global_t(), obj( new NODE() ) {
-        auto data = stream::await( file ); /*--------------------------------------------*/
-        auto img  = rl::LoadImageFromMemory( ext.get(), (uchar*) data.get(), data.size() );
-        obj->txt  = rl::LoadTextureFromImage( img ); rl::UnloadImage( img );
-        set_filter( rl::TEXTURE_FILTER_BILINEAR );
-    }
+    texture_t load( const T& stream, string_t ext ) { do {
 
-    texture_t( rl::Image image ) noexcept : global_t(), obj( new NODE() ) {
-        obj->txt = rl::LoadTextureFromImage( image );
-        set_filter( rl::TEXTURE_FILTER_BILINEAR );
-    }
+        if( stream.is_closed() ){ break; }
 
-    texture_t( string_t path ) noexcept : global_t(), obj( new NODE() ) {
-        obj->txt = rl::LoadTexture( path.get() );
-        set_filter( rl::TEXTURE_FILTER_BILINEAR );
-    }
+        auto data = stream::await(stream);
+        if( !data.has_value() ){ break; }
 
-
-    /*─······································································─*/
-
-    rl::Vector2 size() const noexcept {
-        if( !is_valid() ){ return rl::Vector2({ 0, 0 }); }
-        /*--------------*/ return { 
-            type::cast<float>( obj->txt.width  ), 
-            type::cast<float>( obj->txt.height )
-        };
-    }
-
-    void set_filter( uint filter ) const noexcept {
-         if( obj->filter==filter ){ return; }
-         rl::SetTextureFilter( obj->txt, filter );
-         obj->filter = filter;
-    }
-
-    /*─······································································─*/
-
-    rl::Texture* operator->() const noexcept { return &get(); }
-
-    rl::Texture& get() const noexcept { return obj->txt; }
-
-    bool is_valid() const noexcept { 
-        if( obj->txt.width == 0 ){ return false; }
-        return rl::IsTextureValid( obj->txt ); 
-    }
-
-    /*─······································································─*/
-
-    void draw( transform_2D_t pos, rect_t src ) const noexcept {
-        auto origin = pos.translate.scale / 2; rl::DrawTexturePro( obj->txt, src, rect_t({
-                pos.translate.position.x, pos.translate.position.y,
-                pos.translate.scale.x,    pos.translate.scale.y
-            }), origin, pos.translate.rotation * RAD2DEG, rl::WHITE 
+        auto img = rl::LoadImageFromMemory( 
+            ext.get(), 
+            ( uchar ) data.value().get(), 
+            /*-----*/ data.value .size() 
         );
+
+        auto txt = rl::LoadTextureFromImage( img );
+        rl::UnloadImage( img ); return txt;
+
+    } while(0); return texture_t(); }
+
+    /*─······································································─*/
+
+    void begin( const texture_t& texture ){ 
+        rl::SetShapesTexture( texture, rect_t({
+            0.f, 0.f, (float)texture.width, 
+            /*-----*/ (float)texture.height
+        }) ); 
     }
 
-    void draw( transform_2D_t pos ) const noexcept {
-        auto origin = pos.translate.scale / 2; rl::DrawTexturePro( obj->txt, rect_t({
-                0, 0, type::cast<float>( obj->txt.width  ), 
-                /*-*/ type::cast<float>( obj->txt.height )
-            }), rect_t({
-                pos.translate.position.x, pos.translate.position.y,
-                pos.translate.scale.x,    pos.translate.scale.y
-            }), origin, pos.translate.rotation * RAD2DEG, rl::WHITE 
-        );
+    void end(){ 
+        rl::SetShapesTexture( texture_t(), rect_t({
+            0.f, 0.f, 0.f, 0.f
+        }) ); 
     }
 
     /*─······································································─*/
 
-    void draw( rect_t pos, rect_t src, float angle=0 ) const noexcept {
+    int set_wrap_mode( const texture_t& texture, uint filter ) {
+         if( !is_valid( texture ) ){ return -1; }
+         rl::SetTextureWrap( texture, filter );
+    return 1; }
+
+    int set_filter( const texture_t& texture, uint filter ) {
+         if( !is_valid( texture ) ){ return -1; }
+         rl::SetTextureFilter( texture, filter );
+    return 1; }
+
+    /*─······································································─*/
+
+    void draw( const texture_t& texture, rect_t pos, rect_t src, float angle=0 ){
         auto origin = vec2_t({ pos.width, pos.height }) / 2; 
-        rl::DrawTexturePro( obj->txt, src, rect_t({
-                pos.x, pos.y, pos.width, pos.height
-            }), origin, angle*RAD2DEG, rl::WHITE 
-        );
-    }
-
-    void draw( rect_t pos, float angle=0 ) const noexcept {
-        auto origin = vec2_t({ pos.width, pos.height }) / 2;
-        rl::DrawTexturePro( obj->txt, rect_t({
-                0, 0, type::cast<float>( obj->txt.width  ), 
-                /*-*/ type::cast<float>( obj->txt.height )
-            }), rect_t({
-                pos.x    , pos.y,
-                pos.width, pos.height
-            }), origin, angle*RAD2DEG, rl::WHITE 
-        );
+        rl::DrawTexturePro( texture, src, pos, origin, angle*RAD2DEG, rl::WHITE );
     }
 
     /*─······································································─*/
 
-    void free() const noexcept {
-         if( !is_valid() ){ return; } rl::UnloadTexture( obj->txt );
+    int unload( const texture_t& texture ){ 
+        if( !is_valid( texture ) )  { return -1; }
+        rl::UnloadTexture( texture ); return  1; 
     }
 
-};}
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
