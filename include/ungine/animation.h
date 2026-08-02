@@ -9,39 +9,47 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef UNGINE_RENDER
-#define UNGINE_RENDER
+#ifndef UNGINE_ANIMATION
+#define UNGINE_ANIMATION
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace render {
+namespace ungine { namespace animation {
 
-    void begin    ( const render_t& render, int layer=0 ){ rl::BeginTextureMode( render, layer ); }
-    bool is_valid ( const render_t& render ){ return rl::IsGBufferValid( render ); }
-    void end      () /*------------------*/ { /*--*/ rl::EndTextureMode(); }
-    uint get_layer() /*------------------*/ { return rl::GetRenderLayer(); }
-
-    /*─······································································─*/
-
-    render_t load( int width, int height, int depth=1 ) {
-        return rl::LoadGBuffer( width, height, depth );
-    }
-
-    render_t load( int depth=1 ) {
-        int width  = rl::GetRenderWidth ();
-        int height = rl::GetRenderHeight();
-        return rl::LoadGBuffer( width, height, depth );
+    animation_frame_t load( string_t path ){
+        int /**/ count = 0; animation_frame_t out = {};
+        out.animations = rl::LoadModelAnimations( path.get(), &count );
+        out.count /**/ = count; return out;
     }
 
     /*─······································································─*/
 
-    int unload( const render_t& render ) {
-        if( !is_valid    ( render )){ return -1; } 
-        rl::UnloadGBuffer( render ) ; return  1;
+    bool is_valid( const model_t& model, animation_frame_t anim ) {
+         if( anim.animations==nullptr || anim.count==0 )
+           { return false; } 
+         uint index = anim.index % anim.count;
+         animation_t addr = anim.animations[ index ]; 
+         return rl::IsModelAnimationValid( model, addr ); 
     }
+
+    void update( const model_t& model, animation_frame_t anim ) {
+         if( !is_valid( model, anim ) ){ return; }
+         uint index = anim.index % anim.count;
+         animation_t addr = anim.animations[index];
+         uint frame = anim.frame % addr.keyframeCount;
+         rl::UpdateModelAnimation( model, addr, frame );
+    }
+
+    /*─······································································─*/
+
+    int unload( animation_frame_t anim ){ 
+        rl::UnloadModelAnimations( anim.animations, anim.count );
+    return 1; }
 
 }}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

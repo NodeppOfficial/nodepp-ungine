@@ -14,22 +14,6 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace cursor { enum MODE {
-
-    MODE_CURSOR_DEFAULT       = 0, // Default pointer shape
-    MODE_CURSOR_ARROW         = 1, // Arrow shape
-    MODE_CURSOR_IBEAM         = 2, // Text writing cursor shape
-    MODE_CURSOR_CROSSHAIR     = 3, // Cross shape
-    MODE_CURSOR_POINTING_HAND = 4, // Pointing hand cursor
-    MODE_CURSOR_RESIZE_EW     = 5, // Horizontal resize/move arrow shape
-    MODE_CURSOR_RESIZE_NS     = 6, // Vertical resize/move arrow shape
-    MODE_CURSOR_RESIZE_NWSE   = 7, // Top-left to bottom-right diagonal resize/move arrow shape
-    MODE_CURSOR_RESIZE_NESW   = 8, // The top-right to bottom-left diagonal resize/move arrow shape
-    MODE_CURSOR_RESIZE_ALL    = 9, // The omnidirectional resize/move cursor shape
-    MODE_CURSOR_NOT_ALLOWED   = 10 // The operation-not-allowed shape
-
-};}}
-
 namespace ungine { namespace cursor {
 
     inline void show()                  { rl::ShowCursor(); }

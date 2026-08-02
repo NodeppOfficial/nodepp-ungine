@@ -24,79 +24,104 @@ namespace ungine { namespace node { struct NODE_TREE {
 namespace ungine { class node_t : public global_t {
 public:
 
-    event_t<>      onOpen  ;
-    event_t<>      onUIDraw;
-    event_t<>      on2DDraw;
-    event_t<>      on3DDraw;
+    listener_t<string_t,any_t> onSignal;
+    event_t<>      onNext  ;
+    event_t<>      onU2D   ;
+    event_t<>      onUI    ;
+    event_t<>      on2D    ;
+    event_t<>      on3D    ;
+    event_t<>      onU3D   ;
+    event_t<>      onUUI   ;
     event_t<>      onDraw  ;
     event_t<float> onLoop  ;
     event_t<>      onClose ;
 
 protected:
 
-    using DONE = node::NODE_TREE;
-
-    struct NODE { DONE node ;
-        void* evdr=nullptr, *evlp=nullptr, *evcl=nullptr;
-        bool state=false  ; /*-------------------------*/
+    using DONE = node::NODE_TREE; struct NODE {
+        bool state = false; DONE node;
+        ptr_t<task_t> task;
     };  ptr_t<NODE> obj;
 
-    static void node_iterator( function_t<void,node_t*> cb, node_t* root, bool deep ) {
+    static void node_iterator( function_t<bool,node_t*> cb, node_t* root, bool deep ) {
         
         if( root == nullptr ){ return; } node_t* node = root;
-        if( deep ){ cb( type::cast<node_t>( node->obj->node.node ) ); }
+        if( deep && !cb( type::cast<node_t>( node->obj->node.node ) ) )
+          { return; }
 
         auto x = node->obj->node.node_list.raw().first(); while( x!=nullptr ){
-        auto y = x->next; if( x->data.second.node==nullptr ){ goto NEXT; }
-        if( deep ){ node_iterator( cb, (node_t*)( x->data.second.node ), deep ); }
-        else /**/ { cb( type::cast<node_t>( x->data.second.node ) ); }
+        auto y = x->next; 
+
+            if  ( x->data.second.node==nullptr ) /*----------------*/ { goto NEXT; }
+            if  ( deep ){ node_iterator(cb,(node_t*)( x->data.second.node ),deep); }
+            elif( !cb( type::cast<node_t>( x->data.second.node ) ) ) /**/ { break; }
              
         NEXT:; x=y; }
 
     }
 
     void remove_from_parent() const noexcept {
-         node_t* prnt=nullptr; if( (prnt=get_parent())==nullptr ){ return; }
+         node_t* prnt = get_parent(); if( prnt==nullptr ){ return; }
          prnt->remove_child( *get_attribute<string_t>("name") );
     }
 
-    ptr_t<node_t> init_() {
+    ptr_t<node_t> init() {
         auto self = type::bind( this );
-        self->set_attribute( "name", "root" ); 
-        self->obj->node.node=&self; return self;
+        set_attribute( "name","root" ); 
+        obj->node.node=&self; return self;
     }
 
 public:
 
-    virtual ~node_t() noexcept { if( obj.count()>1 ){ return; } free(); }
-
-    /*----*/ node_t() noexcept : global_t(), obj( new NODE ) { init_(); }
+   ~node_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+    node_t() noexcept : global_t(), obj ( new NODE ) { init(); }
 
     /*─······································································─*/
 
-    node_t( function_t<void,ref_t<node_t>> cb ) noexcept : global_t(), obj( new NODE ) {
-        engine::locker.lock(); auto self = init_(); self->obj->state = true;
+    node_t( function_t<void,ptr_t<node_t>> cb ) noexcept : global_t(), obj( new NODE ) {
 
-        obj->evcl = engine::onClose.once([=](){ self->free(); });
+        engine::locker.lock(); auto self = init(); obj->state = true;
+        obj->task = engine::onClose.once([=](){ self->free(); });
 
-        obj->evlp = engine::onLoop([=]( float delta ){
-            if( !self->exists() ){ return; }
-                 self->onLoop.emit( delta );
-        });
+        engine::onLoop.add([=]( float delta ){
+            if( !self->exists() ){ return -1; }
+            /**/ self->onLoop.emit( delta );
+        return 1; });
 
-        obj->evdr = engine::onDraw([=]( /**/ ){
-            if( !self->exists() ){ return; }
-                 self->onDraw.emit(); 
-        });
+        engine::onNext.add([=]( ){
+            if( !self->exists() ){ return -1; }
+            /**/ self->onNext.emit();
+        return 1; });
+
+        engine::onDraw.add([=]( ){
+            if( !self->exists() ){ return -1; }
+            /**/ self->onDraw.emit(); 
+        return 1; });
 
         process::add([=](){
-            cb( self ); self->onOpen.emit(); 
-            engine::locker.unlock(); return -1;
-        });
+            cb( self ); engine::locker.unlock(); 
+        return -1; });
 
     }
 
     /*─······································································─*/
+
+    node_t* append_child( string_t name, const node_t& value ) const noexcept {
+
+        if( !exists() ) /*--------*/ { return nullptr; }
+        if( has_child( name ) ){ remove_child( name ); }
+
+        value.set_attribute( "name", name );
+
+        value.obj->node.parent   = obj->node. node;
+        obj->node.node_list[name]= value.obj->node;
+
+        return get_child( name );
+    }
+
+    node_t* append_child( const node_t& value ) const noexcept {
+        return append_child( encoder::key::generate(12), value );
+    }
 
     bool has_child( string_t name ) const noexcept { 
         if( !exists() ) /*------------*/ { return false; }
@@ -104,24 +129,12 @@ public:
         return obj->node.node_list.has( name ); 
     }
 
-    void append_child( string_t name, const node_t& value ) const noexcept {
-
-        if( !exists() ) /*----------------*/ { return; }
-        if( has_child( name ) ){ remove_child( name ); }
-
-        value.set_attribute( "name", name );
-        value.obj->node.parent   =obj->node.node;
-        obj->node.node_list[name]=value.obj->node;
-    }
-
-    void append_child( const node_t& value ) const noexcept {
-         append_child( encoder::key::generate(12), value );
-    }
-
     /*─······································································─*/
 
-    ptr_t<node_t*> get_children() const noexcept {
-    ptr_t<node_t*> out( obj->node.node_list.size() ); ulong w=0;
+    ulong count_children() const noexcept { return obj->node.node_list.size(); }
+
+    ptr_t<node_t*> get_children() const noexcept { ulong w=0;
+    ptr_t<node_t*> out( count_children() );
 
         auto x = obj->node.node_list.raw().first(); while(x!=nullptr){
         auto z = type::cast<node_t>( x->data.second.node );
@@ -135,32 +148,39 @@ public:
     }
 
     void remove_child( string_t name ) const noexcept {
-        node_t* child=nullptr; /*------------------------*/
-        if(( child=get_child(name) )==nullptr ) { return; }
-        obj->node.node_list.erase( name ); child->free(); 
+        node_t* child = get_child(name); 
+        if( child==nullptr ) /*-------------------*/ { return; }
+        if( child->obj->node.parent!=obj->node.node ){ return; }
+        obj->node.node_list.erase(name); child->free(); 
     }
+
+    void clear_children() const noexcept {
+    for( auto &x: get_children() ){ x->free(); }}
     
     /*─······································································─*/
 
     ptr_t<render_queue_t> get_render_queue() const noexcept {
         auto view = get_viewport();
-        if ( view==nullptr ){ return nullptr; }
+        if ( view==nullptr )  { return nullptr;  }
         auto que  = type::bind( render_queue_t() );
 
-        get_root()->child_iterator([=]( node_t* node ){
+        get_root()->child_iterator([&]( node_t* node ){
+
+            if( node->has_attribute /*---------------*/ ("visibility") ){
+            auto vis = node->get_attribute<visibility_t>("visibility");
+            if(  vis->mode == 0x00 ) /*---*/ { return false; }
+            if(( vis->mask & view->mask )==0){ return false; }}
 
         //  if( node->has_attribute( "viewport" ) ){ return; }
 
-            if( node->has_attribute /*--------------------------*/ ("visibility") ){
-                auto visibility = node->get_attribute<visibility_t>("visibility");
-            if( !( visibility->visible && ( visibility->mask & view->mask ) ) )
-              { return; }}
+            if( !node->on3D .empty() ){ que->event3D .push( node->on3D  ); }
+            if( !node->on2D .empty() ){ que->event2D .push( node->on2D  ); }
+            if( !node->onUI .empty() ){ que->eventUI .push( node->onUI  ); }
+            if( !node->onU2D.empty() ){ que->eventU2D.push( node->onU2D ); }
+            if( !node->onU3D.empty() ){ que->eventU3D.push( node->onU3D ); }
+            if( !node->onUUI.empty() ){ que->eventUUI.push( node->onUUI ); }
 
-            if( !node->on3DDraw.empty() ){ que->event3D.push( node->on3DDraw ); }
-            if( !node->on2DDraw.empty() ){ que->event2D.push( node->on2DDraw ); }
-            if( !node->onUIDraw.empty() ){ que->eventUI.push( node->onUIDraw ); }
-
-        }, true ); return que;
+        return true; }, true ); return que;
 
     }
 
@@ -182,12 +202,12 @@ public:
     }
 
     node_t* get_parent() const noexcept { 
-        void*  parent =obj->node.parent;
-        return parent==nullptr? nullptr: type::cast<node_t>( parent ); 
+        node_t* parent =type::cast<node_t>( obj->node.parent );
+        return  parent==nullptr? nullptr: parent; 
     }
 
     node_t* get_root() const noexcept { 
-        node_t* root = type::cast<node_t>( obj->node.node ); 
+    node_t* root = type::cast<node_t>( obj->node.node ); 
 
         do { if ( root->get_parent()==nullptr ){ break; }
              root=root->get_parent(); 
@@ -196,8 +216,14 @@ public:
         return root;
     }
 
-    void child_iterator( function_t<void,node_t*> cb, bool deep=false ) const noexcept {
-         node_iterator ( cb, (node_t*)( obj->node.node ), deep );
+    /*─······································································─*/
+
+    void node_iterator( function_t<void,node_t*> cb, bool deep=false ) const noexcept {
+         node_iterator( [&]( node_t* node ){ cb(node); return true; }, type::cast<node_t>( obj->node.node ), deep );
+    }
+
+    void child_iterator( function_t<bool,node_t*> cb, bool deep=false ) const noexcept {
+         node_iterator ( cb, type::cast<node_t>( obj->node.node ), deep );
     }
 
     /*─······································································─*/
@@ -205,35 +231,46 @@ public:
     node_t* get_node( string_t node_path ) const noexcept {
 
         auto list = regex::split( path::normalize( node_path ), "/" );
-        if( list.empty()   ) /*-*/ { return nullptr; }
-        if( !has_child( list[0] ) ){ return nullptr; }
-        if( list.size()==1 ) /*-*/ { return get_child( list[0] ); }
 
+        if( list.empty()   ) /*-*/ { return nullptr; }
+        if( list.size()==1 ) /*-*/ { return get_child( list[0] ); }
+        if( list[0] ==".." ) /*-*/ { 
+            return get_parent()->get_node( list.slice(1).join("/") ); 
+        }   
+        
+        if( !has_child( list[0] ) ){ return nullptr; }
         return get_child( list[0] )->get_node( list.slice(1).join("/") );
 
     }
 
+    node_t* get_node() const noexcept {  
+        return type::cast<node_t>( obj->node.node );
+    }
+
     /*─······································································─*/
 
-    bool exists() const noexcept { return obj->state; }
+    bool exists() const noexcept { return obj->state && obj->node.node!=nullptr; }
+
+    /*─······································································─*/
 
     void remove() const noexcept { free(); }
+    void free  () const noexcept {
 
-    void free() const noexcept {
+        if ( !exists() ) /*---------*/ { return;    } obj->state= false ; 
+        for( auto x: get_children()   ){ x->free(); }
+        if ( !process::should_close() ){ remove_from_parent(); }
+        
+        engine::onClose.off( obj->task ); onClose.emit();
 
-        if ( !exists() ) /*---------*/ { return; } obj->state= false; 
-        for( auto x: get_children()   ){ x->obj->node.parent=nullptr; }
+        /*----------------*/ onNext .clear();
+        onLoop     .clear(); onDraw .clear();
+        onUI       .clear(); onUUI  .clear();
+        on2D       .clear(); onU2D  .clear();
+        on3D       .clear(); onU3D  .clear();
+        onSignal   .clear(); onClose.clear();
         
-        on2DDraw.clear(); onUIDraw.clear();
-        onOpen  .clear(); on3DDraw.clear();
-        onLoop  .clear(); onClose .emit ();
-        
-        if( !process::should_close   ){ 
-            engine::onLoop .off( obj->evlp );
-            engine::onDraw .off( obj->evdr );
-            engine::onClose.off( obj->evcl );
-            remove_from_parent(); 
-        }
+        obj->node.parent = nullptr;
+        obj->node.node   = nullptr;
 
     }
 
@@ -241,15 +278,15 @@ public:
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t node_UI( function_t<void,ref_t<node_t>> clb ){
-return node_t([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_UI( function_t<void,ptr_t<node_t>> clb ){
+return node_t([=]( ptr_t<node_t> self ){
 
-    visibility_t visibility; transform_2D_t transform ;
-    /*--------*/ visibility.mode = render::MODE::RENDER_MODE_UI;
+    auto tmp /**/ = visibility_t();
+         tmp.mode = visibility::MODE::VISIBILITY_MODE_ON ;
+         tmp.mask = visibility::MASK::VISIBILITY_MASK_ALL;
 
-    self->set_attribute( "visibility", visibility );
-    self->set_attribute( "transform" , transform  );
-    self->set_attribute( "type"      , "NodeUI"   );
+    self->set_attribute( "transform" , transform_2D_t() );
+    self->set_attribute( "visibility", tmp );
 
     self->onLoop([=]( float delta ){ 
 
@@ -257,67 +294,14 @@ return node_t([=]( ref_t<node_t> self ){
         auto pr = self->get_parent();
 
     if ( pr != nullptr ){
-        auto pt = pr->get_attribute<transform_2D_t>( "transform" );
+    auto pt = pr->get_attribute<transform_2D_t>( "transform" );
     if ( pt == nullptr ){ goto DEFAULT; }
 
         auto sc = pt->translate.scale    * tr->scale   ;
         auto rt = pt->translate.rotation + tr->rotation;
 
         auto ps = pt->translate.position 
-        /*---*/ + rl::Vector2Rotate( tr->position * tr->scale, pt->translate.rotation )
-        /*---*/ - rl::Vector2Rotate( tr->origin   + vec2_t({
-            pt->translate.scale.x / 2,
-            pt->translate.scale.y / 2
-        }) , rt );
-
-        tr->translate.position = ps * tr->scale;
-        tr->translate.scale    = tr->scale;
-        tr->translate.rotation = rt;
-
-    } else { DEFAULT:;
-
-        tr->translate.scale    = tr->scale;
-        tr->translate.rotation = tr->rotation;
-        tr->translate.position = tr->position
-        /*------------------*/ - rl::Vector2Rotate( tr->origin + vec2_t({
-            tr->translate.scale.x / 2,
-            tr->translate.scale.y / 2
-        }), tr->translate.rotation );
-
-    }});
-
-clb(self); }); }}}
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-namespace ungine { namespace node { node_t node_2D( function_t<void,ref_t<node_t>> clb ){
-return node_t([=]( ref_t<node_t> self ){
-
-    visibility_t visibility; transform_2D_t transform ;
-    /*--------*/ visibility.mode = render::MODE::RENDER_MODE_2D;
-
-    self->set_attribute( "visibility", visibility );
-    self->set_attribute( "transform" , transform  );
-    self->set_attribute( "type"      , "Node2D"   );
-
-    self->onLoop([=]( float ){ 
-
-        auto tr = self->get_attribute<transform_2D_t>( "transform" );
-        auto pr = self->get_parent();
-
-    if ( pr != nullptr ){
-        auto pt = pr->get_attribute<transform_2D_t>( "transform" );
-    if ( pt == nullptr ){ goto DEFAULT; }
-
-        auto sc = pt->translate.scale    * tr->scale   ;
-        auto rt = pt->translate.rotation + tr->rotation;
-
-        auto ps = pt->translate.position 
-        /*---*/ + rl::Vector2Rotate( tr->position, pt->translate.rotation )
-        /*---*/ - rl::Vector2Rotate( tr->origin + vec2_t({
-            tr->translate.scale.x / 2,
-            tr->translate.scale.y / 2
-        }), rt );
+        /*---*/ + rl::Vector2Rotate( tr->position, pt->translate.rotation );
 
         tr->translate.position = ps;
         tr->translate.rotation = rt;
@@ -327,11 +311,7 @@ return node_t([=]( ref_t<node_t> self ){
 
         tr->translate.scale    = tr->scale;
         tr->translate.rotation = tr->rotation;
-        tr->translate.position = tr->position
-        /*------------------*/ - rl::Vector2Rotate( tr->origin + vec2_t({
-            tr->translate.scale.x / 2,
-            tr->translate.scale.y / 2
-        }), tr->translate.rotation );
+        tr->translate.position = tr->position;
 
     }});
 
@@ -339,15 +319,56 @@ clb(self); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t node_3D( function_t<void,ref_t<node_t>> clb ){
-return node_t([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_2D( function_t<void,ptr_t<node_t>> clb ){
+return node_t([=]( ptr_t<node_t> self ){
 
-    visibility_t visibility; transform_3D_t transform ;
-    /*--------*/ visibility.mode = render::MODE::RENDER_MODE_3D;
+    auto tmp /**/ = visibility_t();
+         tmp.mode = visibility::MODE::VISIBILITY_MODE_ON ;
+         tmp.mask = visibility::MASK::VISIBILITY_MASK_ALL;
 
-    self->set_attribute( "visibility", visibility );
-    self->set_attribute( "transform" , transform  );
-    self->set_attribute( "type"      , "Node3D"   );
+    self->set_attribute( "transform" , transform_2D_t() );
+    self->set_attribute( "visibility", tmp );
+
+    self->onLoop([=]( float ){ 
+
+        auto tr = self->get_attribute<transform_2D_t>( "transform" );
+        auto pr = self->get_parent();
+
+    if ( pr != nullptr ){
+    auto pt = pr->get_attribute<transform_2D_t>( "transform" );
+    if ( pt == nullptr ){ goto DEFAULT; }
+
+        auto sc = pt->translate.scale    * tr->scale   ;
+        auto rt = pt->translate.rotation + tr->rotation;
+
+        auto ps = pt->translate.position 
+        /*---*/ + rl::Vector2Rotate( tr->position, pt->translate.rotation );
+
+        tr->translate.position = ps;
+        tr->translate.rotation = rt;
+        tr->translate.scale    = tr->scale; // sc
+
+    } else { DEFAULT:;
+
+        tr->translate.scale    = tr->scale;
+        tr->translate.rotation = tr->rotation;
+        tr->translate.position = tr->position;
+
+    }});
+
+clb(self); }); }}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace node { node_t node_3D( function_t<void,ptr_t<node_t>> clb ){
+return node_t([=]( ptr_t<node_t> self ){
+
+    auto tmp /**/ = visibility_t();
+         tmp.mode = visibility::MODE::VISIBILITY_MODE_ON ;
+         tmp.mask = visibility::MASK::VISIBILITY_MASK_ALL;
+
+    self->set_attribute( "transform" , transform_3D_t() );
+    self->set_attribute( "visibility", tmp );
 
     self->onLoop([=]( float delta ){ 
 
@@ -355,15 +376,15 @@ return node_t([=]( ref_t<node_t> self ){
         auto pr = self->get_parent();
 
     if ( pr != nullptr ){
-        auto pt = pr->get_attribute<transform_3D_t>( "transform" );
+    auto pt = pr->get_attribute<transform_3D_t>( "transform" );
     if ( pt == nullptr ){ goto DEFAULT; }
 
         tr->translate.position = math::vec3      ::rotation  ( tr->position, 
-        /*--------------------*/ math::quaternion::from_euler( pt->translate.rotation )) 
+        /*------------------*/   math::quaternion::from_euler( pt->translate.rotation )) 
         /*------------------*/ + pt->translate.position;
 
         tr->translate.rotation = math::quaternion::to_euler  ( math::quaternion::multiply(
-        /*--------------------*/ math::quaternion::from_euler( pt->translate.rotation ) 
+        /*------------------*/   math::quaternion::from_euler( pt->translate.rotation ) 
         /*------------------*/ , math::quaternion::from_euler( tr->rotation )));
 
         tr->translate.scale    = tr->scale;

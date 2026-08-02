@@ -14,16 +14,36 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
+#include <cfloat>
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
 #include <nodepp/nodepp.h>
+#include <nodepp/listener.h>
+#include <nodepp/encoder.h>
 #include <nodepp/object.h>
 #include <nodepp/event.h>
 #include <nodepp/timer.h>
+#include <nodepp/file.h>
 #include <nodepp/path.h>
 #include <nodepp/fs.h>
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { using namespace nodepp; }
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#ifndef UNGINE_ALLOW_G_BUFFER
+#define UNGINE_ALLOW_G_BUFFER 0
+#endif
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+#define RL_FREE(ptr)        NODEPP_ALLOC().free(ptr)
+#define RL_MALLOC(sz)       NODEPP_ALLOC().malloc(sz)
+#define RL_CALLOC(n,sz)     NODEPP_ALLOC().calloc(n,sz)
+#define RL_REALLOC(ptr,sz)  NODEPP_ALLOC().realloc(ptr,sz)
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
@@ -37,28 +57,30 @@ namespace ungine { namespace rl {
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #include "struct.h"
+#include "utils.h"
 
 #include "global.h"
-#include "lock.h"
 #include "math.h"
 #include "struct.h"
-
-#include "texture.h"
-#include "model.h"
-#include "image.h"
-#include "sound.h"
-#include "mesh.h"
-#include "gui.h"
-#include "vr.h"
+#include "matrix.h"
+#include "kernel.h"
 #include "shader.h"
 
-#include "input.h"
-#include "window.h"
+#include "texture.h"
+#include "image.h"
+#include "render.h"
+
 #include "engine.h"
+#include "window.h"
+#include "input.h"
+#include "mesh.h"
+#include "model.h"
+#include "animation.h"
 
 #include "node.h"
+#include "sound.h"
+#include "shape.h"
 #include "camera.h"
-#include "render.h"
 #include "collision.h"
 
 #include "scene.h"

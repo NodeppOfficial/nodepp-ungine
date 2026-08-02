@@ -14,99 +14,148 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class model_t : public global_t {
-protected:
+namespace ungine { namespace model {
 
-    struct NODE { rl::Model mdl; }; ptr_t<NODE> obj;
+    model_t load( mesh_t mesh ){ 
 
-public:
+        shader_t shd = engine::get_default_model_shader();
+        model_t  mdl = rl::LoadModelFromMesh( mesh );
+        auto     vpt = engine::get_active_viewport();
 
-    /*----*/ model_t() noexcept : global_t(), obj( new NODE() ){ /*---*/ }
-    virtual ~model_t() noexcept { if( obj.count()>1 ){ return; } free(); }
+        if( !shader::is_valid( shd ) ){ return mdl; }
+        if( vpt.null() ) /*--------*/ { return mdl; }
+
+        texture_t mtx = vpt->matrix.texture;
+
+        for( int x = mdl.materialCount; x-->0; ){ 
+             mdl.materials[x].maps[rl::MATERIAL_MAP_BRDF].texture = mtx;
+             mdl.materials[x].shader = shd;
+        }
+
+    return mdl; }
+
+    model_t load( string_t path ){ 
+
+        shader_t shd = engine::get_default_model_shader();
+        auto     vpt = engine::get_active_viewport();
+        model_t  mdl = rl::LoadModel( path.get(  ) );
+
+        if( !shader::is_valid( shd ) ){ return mdl; }
+        if( vpt.null() ) /*--------*/ { return mdl; }
+
+        texture_t mtx = vpt->matrix.texture;
+
+        for( int x = mdl.materialCount; x-->0; ){ 
+             mdl.materials[x].maps[rl::MATERIAL_MAP_BRDF].texture = mtx;
+             mdl.materials[x].shader = shd;
+        }
+
+    return mdl; }
 
     /*─······································································─*/
 
-    model_t( string_t path ) noexcept : global_t(), obj( new NODE() ) {
-        obj->mdl = rl::LoadModel( path.get() );
-    }
+    bool is_valid( const model_t& mdl ) { return rl::IsModelValid( mdl ); }
 
     /*─······································································─*/
 
-    bool is_valid() const noexcept { return rl::IsModelValid( obj->mdl ); }
+    int set_wrap_mode( const model_t& mdl, uint flag ) {
+        if ( !is_valid( mdl ) ){ return -1; }
+        for( int  x=mdl.materialCount; x--; ){
+        for( int  y=12 ; y-->0; ){ // MAX_MATERIAL_MAPS = 12
+             auto z=mdl.materials[x].maps[y].texture;
+        if ( z.id > 0 ) { 
+             rl::SetTextureWrap( z, flag );
+        }}}
+    return 1; }
 
-    rl::Model* operator->() const noexcept { return &get(); }
-
-    rl::Model& get() const noexcept { return obj->mdl; }
+    int set_texture_filter( const model_t& mdl, uint filter ) {
+        if ( !is_valid( mdl ) ){ return -1; }
+        for( int  x=mdl.materialCount; x--; ){
+        for( int  y=12 ; y-->0; ){ // MAX_MATERIAL_MAPS = 12
+             auto z=mdl.materials[x].maps[y].texture;
+        if ( z.id > 0 ) { 
+             rl::SetTextureFilter( z, filter );
+        }}}
+    return 1; }
 
     /*─······································································─*/
 
-    void draw( transform_3D_t trn ) const noexcept {
-    rl::rlDisableBackfaceCulling();
+    void draw( const model_t& mdl, transform_3D_t trn, color_t tint, int mode ) {
+        if( mode == ungine::shape::SHAPE_MODE_NONE ){ return; }
+    rl::rlDisableBackfaceCulling(); do {
 
+        vec3_t axs ({ 0.0f, 0.0f, 0.0f }); float ang = 0.0f;
+
+        auto mtx = engine::get_active_viewport()->matrix;
+        auto pos = trn.translate.position ;
+        auto scl = trn.translate.scale    ;
         auto rot = rl::QuaternionFromEuler(
              trn.translate.rotation.x,
              trn.translate.rotation.y,
              trn.translate.rotation.z
         );
-        
-        auto scl = trn.translate.scale;
-        auto pos = trn.translate.position;
 
+        if( mode & ungine::shape::SHAPE_MODE_WIRE ) 
+          { rl::rlEnableWireMode(); }
+
+        auto transform = math::matrix::from_transform_3D( trn );
+
+        for( int x=0; x< mdl.meshCount; x++ ){
+            
+            color_t    col = { 0 };
+            material_t mat = mdl.materials[mdl.meshMaterial[x]];
+            color_t    cdl = mat.maps[rl::MATERIAL_MAP_DIFFUSE].color;
+
+            col.r = (uchar)(((int)cdl.r*(int)tint.r)/255);
+            col.g = (uchar)(((int)cdl.g*(int)tint.g)/255);
+            col.b = (uchar)(((int)cdl.b*(int)tint.b)/255);
+            col.a = (uchar)(((int)cdl.a*(int)tint.a)/255);
+            mat.maps[rl::MATERIAL_MAP_DIFFUSE].color= col;
+
+            if( matrix::get_pixel_float( mtx, 0, 0, 0 ) != 0.f 
+            ) { rl::DrawMesh( mdl.meshes[x], mat, transform ); }
+
+        }
+
+        if( mode & ungine::shape::SHAPE_MODE_WIRE ) 
+          { rl::rlDisableWireMode(); }
+
+    } while(0); rl::rlEnableBackfaceCulling(); }
+
+    /*─······································································─*/
+
+    void draw( const model_t& mdl, transform_2D_t trn, color_t color, int mode ) {
+
+        if( mode == ungine::shape::SHAPE_MODE_NONE ) { return; }
         vec3_t axs ({ 0.0f, 0.0f, 0.0f }); float ang = 0.0f;
+        transform_3D_t tmp; mode |= 0x10000000;
 
-        rl::QuaternionToAxisAngle( rot, &axs, &ang );
-        rl::DrawModelEx( obj->mdl, pos, axs, ang*RAD2DEG, scl, rl::WHITE );
+        tmp.translate.position = vec3_t({
+            trn.translate.position.x,
+            trn.translate.position.y, 0
+        });
 
-    rl::rlEnableBackfaceCulling();
-    }
+        tmp.translate.scale    = vec3_t({
+            trn.translate.scale.x,
+            trn.translate.scale.y, 1
+        });
 
-    void draw_edges( transform_3D_t trn ) const noexcept {
-    rl::rlDisableBackfaceCulling();
+        tmp.translate.rotation = vec3_t({
+            0, 0, trn.translate.rotation
+        });
 
-        auto rot = rl::QuaternionFromEuler(
-             trn.translate.rotation.x,
-             trn.translate.rotation.y,
-             trn.translate.rotation.z
-        );
-        
-        auto scl = trn.translate.scale;
-        auto pos = trn.translate.position;
+        draw( mdl, tmp, color, mode );
 
-        vec3_t axs ({ 0.0f, 0.0f, 0.0f }); float ang = 0.0f;
-
-        rl::QuaternionToAxisAngle( rot, &axs, &ang );
-        rl::DrawModelWiresEx( obj->mdl, pos, axs, ang*RAD2DEG, scl, rl::WHITE );
-
-    rl::rlEnableBackfaceCulling();
-    }
-
-    void draw_vertex( transform_3D_t trn ) const noexcept {
-    rl::rlDisableBackfaceCulling();
-
-        auto rot = rl::QuaternionFromEuler(
-             trn.translate.rotation.x,
-             trn.translate.rotation.y,
-             trn.translate.rotation.z
-        );
-        
-        auto scl = trn.translate.scale;
-        auto pos = trn.translate.position;
-
-        vec3_t axs ({ 0.0f, 0.0f, 0.0f }); float ang = 0.0f;
-
-        rl::QuaternionToAxisAngle( rot, &axs, &ang );
-        rl::DrawModelPointsEx( obj->mdl, pos, axs, ang*RAD2DEG, scl, rl::WHITE );
-
-    rl::rlEnableBackfaceCulling();
     }
 
     /*─······································································─*/
 
-    void free() const noexcept {
-         if( !is_valid() ){ return; } rl::UnloadModel( obj->mdl );
-    }
+    int unload( const model_t& mdl ){ 
+        if ( !is_valid ( mdl ) ){ return -1; }
+        rl::UnloadModel( mdl );   
+    return 1; }
 
-};}
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 

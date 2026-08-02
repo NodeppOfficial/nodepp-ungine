@@ -14,235 +14,170 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { 
-node_t node_render( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
+namespace ungine { namespace scissor {
+    void begin   ( rect_t rec ){ rl::BeginScissorMode( rec.x, rec.y, rec.width, rec.height ); }
+    void end     () /*------*/ { rl::EndScissorMode  (); }
+}}
 
-    self->set_attribute( "viewport", viewport_t() );
-    self->set_attribute( "type"    , "Render" );
+/*────────────────────────────────────────────────────────────────────────────*/
 
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
+namespace ungine { namespace blend {
+    void begin   ( uint blend_mode ){ rl::BeginBlendMode( blend_mode ); }
+    void end     () /*-----------*/ { rl::EndBlendMode  (); }
+}}
 
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() );
-             
-        auto que = self->get_render_queue();
+/*────────────────────────────────────────────────────────────────────────────*/
 
-    render::emit_render( &vpt->render, [&](){
-        rl::ClearBackground( vpt->background );
-
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
-
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); }}
-
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); }}
-        
-        if( !que->eventUI.empty() ){
-
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }
-
-    }); });
-
-clb( self ); }); }}}
+namespace ungine { namespace draw {
+    void begin() { rl::BeginDrawing(); }
+    void end  () { rl::EndDrawing  (); }
+}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace node { 
-node_t node_vr_render( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
+node_t node_render( function_t<void,ptr_t<node_t>> clb, int layers ) {
+return node::node_rectangle( [=]( ptr_t<node_t> self ){
 
-    self->set_attribute( "viewport", viewport_t() );
-    self->set_attribute( "type"    , "Render" );
-    self->set_attribute( "vr"      , vr_t() );
+    auto rnd = ptr_t<render_t>( 0UL, render::load(layers) );
 
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
+    auto shp = self->get_attribute<shape_2D_t>( "shape" );
+    auto mtx = matrix::load( 32 , 4, 4 );
+    auto tmp = viewport_t(); 
+         tmp.render = rnd; 
+         tmp.matrix = mtx;
+    
+    shp->model.materials[0].shader /*-----*/ = engine::get_default_canva_shader();
+    shp->model.materials[0].maps[rl::MATERIAL_MAP_ALBEDO].texture = rnd[0].albedo;
+    shp->model.materials[0].maps[rl::MATERIAL_MAP_BRDF  ].texture = mtx.texture  ;
 
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() ); 
-             
-        auto vr  = self->get_attribute<vr_t>( "vr" );
-        auto que = self->get_render_queue();
+    self->set_attribute( "viewport", tmp ); self->on2D.clear();
+    auto  vpt = self->get_attribute<viewport_t>( "viewport" );
+    
+    self->onClose([=](){ render::unload(rnd[0]); matrix::unload( mtx ); }); 
+    self->onNext ([=](){
+        auto &tmp = engine::get_active_viewport(); tmp = vpt;
+    }); self->onNext.emit();
 
-    render::emit_render( &vpt->render, [&](){ vr->emit([&](){
-        rl::ClearBackground( vpt->background );
+    if( &vpt == self->get_root_viewport() ){
+    self->onNext.add( coroutine::add( COROUTINE(){
+    coBegin
 
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
+        do {
 
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+            auto  mtx = vpt->matrix; 
+            float stm = engine::get_delta()
+                      + matrix::get_pixel_float( mtx, 0, 0, 1 ); 
 
-        }); }}
+            matrix::set_pixel_float( mtx, 0, 1, 3, window::get_size().x );
+            matrix::set_pixel_float( mtx, 0, 1, 2, window::get_size().y );
+            matrix::set_pixel_float( mtx, 0, 1, 1, tmp.render[0].depth  );
+            matrix::set_pixel_float( mtx, 0, 1, 0, stm );
 
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); }}
+        } while(0); coGoto(0);
         
-        if( !que->eventUI.empty() ){
+    coFinish })); }
 
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
+    self->onDraw ([=](){
 
-        }
+        auto vpt = self->get_attribute<viewport_t>( "viewport" );
+        auto que = self->get_render_queue();
+        auto mtx = vpt->matrix;
 
-    }); }); });
+    for( int x=0; x<=vpt->render[0].depth; x++ ){
 
-clb( self ); }); }}}
+        matrix::set_pixel_float( mtx, 0, 0, 0, (float) x );
+        matrix::update( mtx );
+        render::begin ( vpt->render[0], x );
+
+        if( x==0 ){ rl::ClearBackground( rl::BLANK ); }
+        if( !vpt->camera3D.null() ){ do {
+        cam3D::begin( *vpt->camera3D );
+
+            auto w=que->eventU3D.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->event3D.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0); cam3D::end(); }
+
+        if( !vpt->camera2D.null() ){ do {
+        cam2D::begin( *vpt->camera2D );
+
+            auto w=que->eventU2D.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->event2D.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0); cam2D::end(); } else { do {
+
+            auto w=que->eventU2D.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->event2D.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0); } do {
+
+            auto w=que->eventUUI.first(); while( w!=nullptr ){
+            auto y=w->next; w->data.emit(); w=y; }
+
+        if( x!=0 ){ break; }
+
+            auto z=que->eventUI.first(); while( z!=nullptr ){
+            auto y=z->next; z->data.emit(); z=y; }
+
+        } while(0);
+
+    render::end(); }}); clb( self ); 
+
+}); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 namespace ungine { namespace node {
-node_t node_scene( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
+node_t node_scene( function_t<void,ptr_t<node_t>> clb, int layers=2 ) {
+return node_render([=]( ptr_t<node_t> self ){
 
-    self->set_attribute( "viewport", viewport_t() );
-    self->set_attribute( "type"    , "Render" );
+    auto pos = self->get_attribute<transform_2D_t>( "transform" );
+    auto vpt = self->get_attribute<viewport_t>    ( "viewport" );
+    auto shp = self->get_attribute<shape_2D_t>    ( "shape" );
+    auto mtx = vpt ->matrix;
 
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
+    self->onDraw([=](){
+      
+        draw::begin(); rl::ClearBackground ( vpt->background );
+        model::draw( shp->model, *pos, shp->color, shp->mode );
 
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() ); 
-             
-        auto que = self->get_render_queue();
-
-    render::emit_render( &vpt->render, [&](){
-        rl::ClearBackground( vpt->background );
-
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
-
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); }}
-
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); } else {
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }}
+        /*
+        blend::begin( blend::MODE::BLEND_MODE_ALPHA );
+        rl::DrawTexturePro( vpt->render[0].albedo,
+            rect_t({ 0, 0, 
+                (float) vpt->render[0].albedo.width ,
+                (float)-vpt->render[0].albedo.height,
+            }), 
+            rect_t({ 0, 0, 
+                (float) window::get_size().x,
+                (float) window::get_size().y,
+            }), 
+        vec2_t({ 0, 0 }), .0f, rl::WHITE );
+        blend::end();
+        */
         
-        if( !que->eventUI.empty() ){ 
-
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }
-
-    });
-
-    render::emit( [&](){ if( rnd.null() ){ return; }
-        
-        auto txt = rnd->get().texture; 
-
-        auto src = rect_t({ 0, 0, txt.width,-txt.height });
-        auto dst = rect_t({ 0, 0, txt.width, txt.height });
-
-        rl::DrawTexturePro ( txt, src, dst, vec2_t({ 0, 0 }), .0f, rl::WHITE );
-
-    }); });
-
-clb( self ); }); }}}
-
-/*────────────────────────────────────────────────────────────────────────────*/
-
-namespace ungine { namespace node {
-node_t node_vr_scene( function_t<void,ref_t<node_t>> clb ) {
-return node_t([=]( ref_t<node_t> self ){
-
-    self->set_attribute( "viewport", viewport_t() );
-    self->set_attribute( "type"    , "Render" );
-    self->set_attribute( "vr"      , vr_t() );
-
-    auto rnd = type::bind( render_t() ); self->onDraw([=](){
-
-        auto siz = window::get_size(); rnd->set_size( siz.x, siz.y );
-        auto vpt = self->get_viewport(); if(vpt==nullptr){ return; }
-             vpt->render = type::bind( &rnd->get() ); 
-             
-        auto vr  = self->get_attribute<vr_t>( "vr" );
-        auto que = self->get_render_queue();
-
-    render::emit_render( &vpt->render, [&](){ vr->emit([&](){
-        rl::ClearBackground( vpt->background );
-
-        if( !que->event3D.empty() ){
-        if( !vpt->camera3D.null() ){
-        render::emit_3D( &vpt->camera3D, [&](){
-
-            auto x=que->event3D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); }}
-
-        if( !que->event2D.empty() ){ 
-        if( !vpt->camera2D.null() ){
-        render::emit_2D( &vpt->camera2D, [&](){
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }); } else {
-
-            auto x=que->event2D.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-        }}
-        
-        if( !que->eventUI.empty() ){ 
-
-            auto x=que->eventUI.first(); while( x!=nullptr ){
-            auto y=x->next; x->data.emit(); x=y; }
-
-        }
-
-    });});
-
-    render::emit( [&](){ if( rnd.null() ){ return; }
-        
-        auto txt = rnd->get().texture; 
-
-        auto src = rect_t({ 0, 0, txt.width,-txt.height });
-        auto dst = rect_t({ 0, 0, txt.width, txt.height });
-
-        rl::DrawTexturePro ( txt, src, dst, vec2_t({ 0, 0 }), .0f, rl::WHITE );
-
-    }); });
-
-clb( self ); }); }}}
+    draw::end(); }); clb( self );
+ 
+}, layers ); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/

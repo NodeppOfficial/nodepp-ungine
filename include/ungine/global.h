@@ -21,8 +21,8 @@ protected:
 
 public:
 
-    /*----*/ global_t() noexcept : attr( new ATTR() ){}
-    virtual ~global_t() noexcept { /*--------------*/ }
+    global_t() noexcept : attr( new ATTR() ){}
+   ~global_t() noexcept { /*--------------*/ }
 
     /*─······································································─*/
 
@@ -41,15 +41,34 @@ public:
         attr->obj[ name ] = type::bind( value );
     }
 
+    void clear() const noexcept { attr->obj.clear(); }
+
     /*─······································································─*/
 
     template< class T >
-    ref_t<T> get_attribute( string_t name ) const { try {
-
+    ptr_t<T> get_attribute( string_t name ) const {
         if( !attr->obj.has( name ) ){ return nullptr; }
         return attr->obj[ name ].as<ptr_t<T>>();
+    }
 
-    } catch( except_t err ) { return nullptr; }}
+};}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { class lock_t : public global_t {
+protected:
+
+    struct NODE { int value = 0; }; ptr_t<NODE> obj;
+
+public:
+
+    lock_t() noexcept : global_t(), obj( new NODE() ){}
+   ~lock_t() noexcept { /*--------------*/ }
+
+    void      lock() const noexcept { ++obj->value; }
+    void    unlock() const noexcept { --obj->value; }
+
+    bool is_locked() const noexcept { return obj->value != 0; }
 
 };}
 
