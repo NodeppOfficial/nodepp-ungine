@@ -14,14 +14,59 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t camera_3D( function_t<void,ref_t<node_t>> clb ){
-return node_3D([=]( ref_t<node_t> self ){
+namespace ungine { namespace cam3D {
+
+    void begin( camera_3D_t render ){ rl::BeginMode3D( render ); }
+    void end  () /*--------------*/ { rl::EndMode3D  (); }
+
+    ray_t vec_2_world( camera_3D_t cam, vec2_t pos ) {
+        auto tmp = rl::Camera3D();
+             tmp.position   = cam.position;
+             tmp.target     = cam.target;
+             tmp.up         = cam.up;
+             tmp.fovy       = cam.fovy;
+             tmp.projection = cam.projection;
+        return rl::GetScreenToWorldRay( pos, tmp );
+    }
+
+    vec2_t world_2_vec( camera_3D_t cam, vec3_t pos ) {
+        auto tmp = rl::Camera3D();
+             tmp.position   = cam.position;
+             tmp.target     = cam.target;
+             tmp.up         = cam.up;
+             tmp.fovy       = cam.fovy;
+             tmp.projection = cam.projection;
+        return rl::GetWorldToScreen( pos, tmp );
+    }
+
+}}
+
+namespace ungine { namespace cam2D {
+
+    void begin( camera_2D_t render ){ rl::BeginMode2D( render ); }
+    void end  () /*--------------*/ { rl::EndMode2D  (); }
+
+    vec2_t vec_2_world( camera_2D_t cam, vec2_t pos ) {
+        return rl::GetScreenToWorld2D( pos, cam );
+    }
+
+    vec2_t world_2_vec( camera_2D_t cam, vec2_t pos ) {
+        return rl::GetWorldToScreen2D( pos, cam );
+    }
+
+}}
+
+/*────────────────────────────────────────────────────────────────────────────*/
+
+namespace ungine { namespace node { node_t node_camera_3D( function_t<void,ptr_t<node_t>> clb ){
+return node_3D([=]( ptr_t<node_t> self ){
 
     camera_3D_t camera;
     /*-------*/ camera.fovy       = 90.0f;
-    /*-------*/ camera.projection = camera::VIEW::PROJECTION_PERSPECTIVE;
+    /*-------*/ camera.projection = camera::VIEW::PROJECTION_VIEW_PERSPECTIVE;
 
     self->set_attribute( "camera", camera );
+
     auto view = self->get_viewport(); if( view==nullptr ) { return; }
 
     if( view->camera3D.null() ){
@@ -47,34 +92,35 @@ clb( self ); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t fly_camera_3D( function_t<void,ref_t<node_t>> clb ){
-return camera_3D([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_fly_camera_3D( function_t<void,ptr_t<node_t>> clb ){
+return node_camera_3D([=]( ptr_t<node_t> self ){
 
-    auto cam = self->get_attribute<camera_3D_t>   ( "camera" );
     auto pos = self->get_attribute<transform_3D_t>( "transform" );
+    auto cam = self->get_attribute<camera_3D_t>   ( "camera" );
     auto vec = type::bind( vec3_t({ 0, 0, 0 }) );
 
     self->onLoop([=]( float delta ){
 
-        if  ( ungine::key::is_down( 'W' ) )
+        if  ( key::is_down( 'W' ) )
             { vec->z = 300 * delta * 1; }
-        elif( ungine::key::is_down( 'S' ) )
+        elif( key::is_down( 'S' ) )
             { vec->z = 300 * delta *-1; }
         else{ vec->z = 0; }
 
-        if  ( ungine::key::is_down( 'A' ) )
+        if  ( key::is_down( 'A' ) )
             { vec->x = 300 * delta * 1; }
-        elif( ungine::key::is_down( 'D' ) )
+        elif( key::is_down( 'D' ) )
             { vec->x = 300 * delta *-1; }
         else{ vec->x = 0; }
 
     });
 
     self->onLoop([=]( float delta ){
-    if( !ungine::cursor::is_hidden() ){ return; }
+    if( !window::is_focused() ){ return; }
 
-        auto data /**/ = ungine::mouse::get_delta();
-        pos->rotation += vec3_t({data.y,-data.x,0.f}) * delta * .5f;
+        auto data /*-*/ = mouse::get_delta();
+        pos->rotation  += vec3_t({data.y,-data.x,0.f}) * delta * .5f;
+        pos->rotation.x = clamp( pos->rotation.x, -PI/2, PI/2 );
 
         pos->position += math::vec3::rotation( *vec, 
         /*------------*/ math::quaternion::from_euler( pos->rotation ) 
@@ -86,11 +132,10 @@ clb( self ); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t camera_2D( function_t<void,ref_t<node_t>> clb ){
-return node_2D([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_camera_2D( function_t<void,ptr_t<node_t>> clb ){
+return node_2D([=]( ptr_t<node_t> self ){
 
-    camera_2D_t camera;
-    /*-------*/ camera.zoom = 1.0f;
+    camera_2D_t camera; camera.zoom = 1.0f;
 
     self->set_attribute( "camera", camera );
     auto view = self->get_viewport(); if( view==nullptr ) { return; }
@@ -114,23 +159,23 @@ clb( self ); }); }}}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace node { node_t fly_camera_2D( function_t<void,ref_t<node_t>> clb ){
-return camera_2D([=]( ref_t<node_t> self ){
+namespace ungine { namespace node { node_t node_fly_camera_2D( function_t<void,ptr_t<node_t>> clb ){
+return node_camera_2D([=]( ptr_t<node_t> self ){
 
     auto cam = self->get_attribute<camera_2D_t>   ( "camera" );
     auto pos = self->get_attribute<transform_2D_t>( "transform" );
 
     self->onLoop([=]( float delta ){
-    if( !ungine::cursor::is_hidden() ){ return; }
+    if( !cursor::is_hidden() ){ return; }
 
-        if  ( ungine::key::is_down( 'W' ) )
+        if  ( key::is_down( 'W' ) )
             { pos->position.y += 100 * delta * 1; }
-        elif( ungine::key::is_down( 'S' ) )
+        elif( key::is_down( 'S' ) )
             { pos->position.y += 100 * delta *-1; }
 
-        if  ( ungine::key::is_down( 'A' ) )
+        if  ( key::is_down( 'A' ) )
             { pos->position.x += 100 * delta * 1; }
-        elif( ungine::key::is_down( 'D' ) )
+        elif( key::is_down( 'D' ) )
             { pos->position.x += 100 * delta *-1; }
 
     });

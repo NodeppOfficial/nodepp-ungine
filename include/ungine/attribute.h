@@ -9,39 +9,45 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef UNGINE_RENDER
-#define UNGINE_RENDER
+#ifndef UNGINE_ATTRIBUTE
+#define UNGINE_ATTRIBUTE
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { namespace render {
-
-    void begin    ( const render_t& render, int layer=0 ){ rl::BeginTextureMode( render, layer ); }
-    bool is_valid ( const render_t& render ){ return rl::IsGBufferValid( render ); }
-    void end      () /*------------------*/ { /*--*/ rl::EndTextureMode(); }
-    uint get_layer() /*------------------*/ { return rl::GetRenderLayer(); }
+namespace ungine { class attribute_t {
+protected: object_t storage;
+public:    attribute_t() noexcept {}
 
     /*─······································································─*/
 
-    render_t load( int width, int height, int depth=1 ) {
-        return rl::LoadGBuffer( width, height, depth );
-    }
-
-    render_t load( int depth=1 ) {
-        int width  = rl::GetRenderWidth ();
-        int height = rl::GetRenderHeight();
-        return rl::LoadGBuffer( width, height, depth );
-    }
+    bool has_attribute   ( string_t name ) const noexcept { return storage.has(name); }
+    void remove_attribute( string_t name ) const noexcept { storage.erase( name ); }
 
     /*─······································································─*/
 
-    int unload( const render_t& render ) {
-        if( !is_valid    ( render )){ return -1; } 
-        rl::UnloadGBuffer( render ) ; return  1;
+    void set_attribute( string_t name, const char* value ) const noexcept {
+         storage[ name ] = type::bind( string::to_string( value ) ); 
     }
 
-}}
+    template< class T >
+    void set_attribute( string_t name, T value ) const noexcept {
+         storage[ name ] = type::bind( value );
+    }
+
+    void clear() noexcept { storage.clear(); }
+
+    /*─······································································─*/
+
+    template< class T >
+    ptr_t<T> get_attribute( string_t name ) const {
+        if( !storage.has( name ) ){ return nullptr; }
+        return storage[ name ].as<ptr_t<T>>();
+    }
+
+};}
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #endif
+
+/*────────────────────────────────────────────────────────────────────────────*/
