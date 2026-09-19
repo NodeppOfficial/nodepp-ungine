@@ -14,7 +14,7 @@
 
 /*────────────────────────────────────────────────────────────────────────────*/
 
-namespace ungine { class node_t {
+namespace ungine { class node_t : public attribute_t {
 public:
 
     listener_t<string_t,any_t> onSignal;
@@ -31,138 +31,125 @@ public:
 
 protected:
 
-    struct DONE {
-        void *node=nullptr, *parent=nullptr, *root=nullptr;
-        map_t<string_t,DONE> node_list;
-    };
-
-    struct NODE {
-        array_t<ptr_t<task_t>>   task; object_t att;
-        bool state = false; DONE node;
+    struct NODE { bool exists=false; 
+        uchar_64 self, root, parent;
+        array_t<ptr_t<task_t>>   task;
+        map_t<string_t,uchar_64> node;
     };  ptr_t<NODE> obj;
 
-    static void node_iterator( function_t<bool,node_t*> cb, node_t* root, bool deep ) {
-        
-        if( root == nullptr ){ return; } node_t* node = root;
-        if( deep && !cb( type::cast<node_t>( node->obj->node.node ) ) )
-          { return; }
+    handler_t<node_t>& node_handler() const noexcept { static handler_t<node_t> out; return out; }
 
-        auto x = node->obj->node.node_list.raw().first(); while( x!=nullptr ){
-        auto y = x->next; 
+    void node_iterator( function_t<bool,node_t*> cb, node_t* root, bool deep ) const noexcept {
 
-            if  ( x->data.second.node==nullptr ) /*----------------*/ { goto NEXT; }
-            if  ( deep ){ node_iterator(cb,(node_t*)( x->data.second.node ),deep); }
-            elif( !cb( type::cast<node_t>( x->data.second.node ) ) ) /**/ { break; }
+        if( !root ) /*------*/ { return; }
+        if( deep && !cb(root) ){ return; } auto mem = node_handler();
+
+        auto x = root->obj->node.raw().first(); while( x!=nullptr ){
+        auto y = x->next; auto node = &mem.read( x->data.second );
+
+            if  ( deep ){ node_iterator( cb, node, deep ); }
+            elif( !cb( node ) ){ break; }
              
-        NEXT:; x=y; }
+        x=y; }
 
-    }
-
-    ptr_t<node_t> init() {
-        auto self = type::bind( this );
-        set_attribute( "name","root" ); 
-        obj->node.root=&self;
-        obj->node.node=&self; return self;
     }
 
 public:
 
    ~node_t() noexcept { if( obj.count()>1 ){ return; } free(); }
-    node_t() noexcept : obj( new NODE() ) { init(); }
+    node_t() noexcept : obj( new NODE() ), attribute_t() {}
 
     /*─······································································─*/
 
-    node_t( function_t<void,ptr_t<node_t>> cb ) noexcept : obj( new NODE() ) {
+    node_t( function_t<void,ptr_t<node_t>> cb ) noexcept : obj( new NODE() ), attribute_t() {
 
-        engine::get_lock()++; auto self = init(); obj->state = true;
+        auto mem  = node_handler(); auto hdl= mem.create(); obj->exists=true;
+        mem.update( hdl, *this ); obj->self = hdl; obj->root = hdl;
+        auto self = mem.read( obj->self );
 
-        obj->task.push( engine::onClose.once([=](){ self->free(); }) );
+        engine::onConstructor.once([=](){ cb( self ); });
 
         obj->task.push( engine::onLoop.add([=]( float delta ){
-            if( !self->exists() ){ return -1; }
-            /**/ self->onLoop.emit( delta );
-        return 1; }) );
+        do { if( !self->exists() ){ break; }
+             self->onLoop.emit( delta ); return 1;
+        } while(0); return -1; }) );
 
         obj->task.push( engine::onNext.add([=](){
-            if( !self->exists() ){ return -1; }
-            /**/ self->onNext.emit();
-        return 1; }) );
+        do { if( !self->exists() ){ break; }
+             self->onNext.emit(); return 1;
+        } while(0); return -1; }) );
 
         obj->task.push( engine::onDraw.add([=](){
-            if( !self->exists() ){ return -1; }
-            /**/ self->onDraw.emit(); 
-        return 1; }) );
+        do { if( !self->exists() ){ break; }
+             self->onDraw.emit(); return 1;
+        } while(0); return -1; }) );
 
-        process::add([=](){
-            cb( self ); engine::get_lock()--; 
-        return -1; });
+        obj->task.push( engine::onClose.add([=](){ 
+        do { if( !self->exists() ){ break; }
+             self->free(); /*return 1*/
+        } while(0); return -1; }) );
 
     }
 
     /*─······································································─*/
 
     node_t* append_child( string_t name, const node_t& value ) const noexcept {
-    do {
-
-        if( !exists() ){ break; }
-        if( has_child( name ) ){ remove_child( name ); }
-        if( value.obj->node.parent!= nullptr ){ break; }
+    do{ 
+        if( !exists()         ){ value.free(); break; }
+        if( !value.exists()   ){ /*---------*/ break; }
+        if( value.obj->parent ){ /*---------*/ break; }
+        if( has_child( name ) ){ remove_child (name); }
 
         value.set_attribute( "name", name );
 
-        value.obj->node.parent   = obj->node.node ;
-        value.obj->node.root     = obj->node.root ;
-        obj->node.node_list[name]= value.obj->node;
+        value.obj->parent = obj->self;
+        value.obj->root   = obj->root;
+        obj->node[ name ] = value.obj->self;
 
-        return get_child( name );
-    
-    } while(0); return nullptr; }
-
-    node_t* append_child( const node_t& value ) const noexcept {
-    return  append_child( string::to_string( value.obj->node.node ), value ); }
+    return get_child( name ); } while(0); return nullptr; }
 
     bool has_child( string_t name ) const noexcept { 
-        if( !exists() ) /*------------*/ { return false; }
-        if( obj->node.node_list.empty() ){ return false; }
-        return obj->node.node_list.has( name ); 
+         return exists() ? obj->node.has( name ) : false; 
     }
+
+    node_t* append_child( const node_t& value ) const noexcept {
+    return  append_child( string::to_string( value.obj->self ), value ); }
 
     /*─······································································─*/
 
-    ulong count_children() const noexcept { return obj->node.node_list.size(); }
+    ptr_t<node_t*> get_children() const noexcept { do {
 
-    ptr_t<node_t*> get_children() const noexcept { ulong w=0;
-    ptr_t<node_t*> out( count_children() );
+        if( obj->node.empty() ){ break; }
+        
+        ptr_t<node_t*> out( obj->node.size() ); ulong x=0;
+        obj->node.raw().map([&]( pair_t<string_t,uchar_64> item ){
+            out[x] = &node_handler().read( item.second ); 
+        x++; });
 
-        auto x = obj->node.node_list.raw().first(); while(x!=nullptr){
-        auto z = type::cast<node_t>( x->data.second.node );
-        auto y = x->next; out[w]=z; x=y; ++w; }
+    return out; } while(0); return nullptr; }
+    
+    /*─······································································─*/
 
-    return out; }
+    void remove_child( string_t name ) const noexcept { get_child(name)->free(); }
 
     node_t* get_child( string_t name ) const noexcept {
-        if( !has_child( name ) ) /*----------*/ { return nullptr; }
-        return type::cast<node_t>( obj->node.node_list[name].node );
-    }
-
-    void remove_child( string_t name ) const noexcept {
-        if( has_child( name ) ){ get_child(name)->free(); }
-    }
+    do{ if( !has_child( name ) ){ break; }
+        return &node_handler().read( obj->node[name] );
+    } while(0); return nullptr; }
 
     void clear_children() const noexcept {
     for( auto &x: get_children() ){ x->free(); }}
     
     /*─······································································─*/
 
-    ptr_t<render_queue_t> get_render_queue() const noexcept {
-        auto view = get_viewport();
-        if ( view==nullptr )  { return nullptr;  }
+    ptr_t<render_queue_t> get_render_queue() const noexcept { do {
+        auto view = get_root_viewport(); if( !view ){ break; }
         auto que  = type::bind( render_queue_t() );
 
         get_root()->child_iterator([&]( node_t* node ){
 
             if( node->has_attribute /*---------------*/ ("visibility") ){
-            auto vis = node->get_attribute<visibility_t>("visibility");
+            auto vis = node->get_attribute<visibility_t>("visibility") ;
             if(  vis->mode == 0x00 ) /*---*/ { return false; }
             if(( vis->mask & view->mask )==0){ return false; }}
 
@@ -177,108 +164,71 @@ public:
 
         return true; }, true ); return que;
 
-    }
+    } while(0); return nullptr; }
 
-    viewport_t* get_viewport() const noexcept {
-    node_t* root = type::cast<node_t>( obj->node.node ); 
+    /*─······································································─*/
 
-        do { if ( root->get_parent()==nullptr ){ break; }
-        if ( root->has_attribute( "viewport" )){ break; }
-             root=root->get_parent(); 
-        } while ( root->get_parent()!=nullptr );
+    viewport_t* get_root_viewport() const noexcept { return get_root()->get_viewport(); }
+    viewport_t* get_viewport     () const noexcept { do {
+        
+        node_t* root = get_node(); while( root ) {
+        if( root->has_attribute( "viewport" )){ break; }
+            root=root->get_parent(); 
+        } if (!root ) { break; }
 
-        if (!root->has_attribute( "viewport" )){ return nullptr; }
-        return &root->get_attribute<viewport_t>( "viewport" );
-    }
+    return &root->get_attribute<viewport_t>( "viewport" );
+    } while(0); return nullptr; }
 
-    viewport_t* get_root_viewport() const noexcept {
-    node_t*    root =get_root();
-        return root==nullptr ? nullptr : root->get_viewport();
-    }
+    /*─······································································─*/
 
-    node_t* get_parent() const noexcept { 
-        return type::cast<node_t>( obj->node.parent );
-    }
-
-    node_t* get_root() const noexcept { 
-        return obj->node.root==nullptr ? (node_t*) this : (node_t*) obj->node.root;
-    }
+    node_t* get_node  () const noexcept { return (node_t*) this; }
+    node_t* get_root  () const noexcept { return &node_handler().read( obj->root   ); }
+    node_t* get_parent() const noexcept { return &node_handler().read( obj->parent ); }
 
     /*─······································································─*/
 
     void node_iterator( function_t<void,node_t*> cb, bool deep=false ) const noexcept {
-         node_iterator( [&]( node_t* node ){ cb(node); return true; }, type::cast<node_t>( obj->node.node ), deep );
+         node_iterator( [&]( node_t* node ){ cb(node); return true; }, get_node(), deep );
     }
 
     void child_iterator( function_t<bool,node_t*> cb, bool deep=false ) const noexcept {
-         node_iterator ( cb, type::cast<node_t>( obj->node.node ), deep );
+         node_iterator ( cb, get_node(), deep );
     }
 
     /*─······································································─*/
 
-    node_t* get_node() const noexcept { return type::cast<node_t>( obj->node.node ); }
-    
-    node_t* get_node( string_t node_path ) const noexcept {
+    bool    has_node( string_t node_path ) const noexcept { return get_node( node_path ); }
+    node_t* get_node( string_t node_path ) const noexcept { do {
 
         auto list = regex::split( path::normalize( node_path ), "/" );
-        if ( list.empty() ){ return nullptr; } auto item = get_node();
+        if ( list.empty() ){ break; } auto item = get_node();
 
-        for( auto x: list ){
+        for( auto x: list    ){
         if ( item == nullptr ){ break; }
         if ( x == ".." ){ item = item->get_parent( ); continue; }
         if ( x == "."  ){ item = item->get_node  ( ); continue; }
            /*----------*/ item = item->get_child (x);
         }
 
-        return item; 
-
-    }
-
-    bool has_node( string_t node_path ) const noexcept { 
-         return get_node( node_path ) != nullptr; 
-    }
+    return item; } while(0); return nullptr; }
 
 public:
 
-    bool has_attribute   ( string_t name ) const noexcept { return obj->att.has(name); }
-
-    void remove_attribute( string_t name ) const noexcept { obj->att.erase( name ); }
-
-    /*─······································································─*/
-
-    void set_attribute( string_t name, const char* value ) const noexcept {
-        obj->att[ name ] = type::bind( string::to_string( value ) ); 
-    }
-
-    template< class T >
-    void set_attribute( string_t name, T value ) const noexcept {
-        obj->att[ name ] = type::bind( value );
-    }
-
-    void clear() const noexcept { obj->att.clear(); }
-
-    /*─······································································─*/
-
-    template< class T >
-    ptr_t<T> get_attribute( string_t name ) const {
-        if( !obj->att.has( name ) ){ return nullptr; }
-        return obj->att[ name ].as<ptr_t<T>>();
-    }
-
-public:
-
-    bool exists() const noexcept { return obj->state && obj->node.node!=nullptr; }
+    bool exists() const noexcept { return obj->exists==true; }
     void remove() const noexcept { free(); }
-    void   free() const noexcept { if( !exists() ){ return; } obj->state= false; 
+    void   free() const noexcept { if( !exists() ){ return; }
 
-        if( get_parent()!= nullptr && has_attribute("name") ){ 
-            auto name = get_attribute<string_t>    ("name");
-            get_parent()->obj->node.node_list.erase(*name ); 
-        }   clear_children(); onClose.emit(); 
+        auto self   = type::bind( this ); obj->exists=false; 
+        clear_children(); onClose.emit(); 
 
-        auto self = type::bind( this ); 
-        
-        engine::onFree.add([=](){
+        if( get_parent() && has_attribute("name") ){ 
+            auto name = get_attribute<string_t>("name");
+            get_parent()->obj->node.erase( name[0] ); 
+        }
+
+        engine::onDestructor.once([=](){
+
+            self->node_handler().remove( self->obj->self );
 
             /*-------------------*/ self->onNext .clear();
             self->onLoop  .clear(); self->onDraw .clear();
@@ -292,12 +242,11 @@ public:
             engine::onNext .off( self->obj->task[2] ); 
             engine::onDraw .off( self->obj->task[3] ); 
             
-            self->obj->node.parent = nullptr;
-            self->obj->node.node   = nullptr;
-            self->obj->node.root   = nullptr;
+            self->obj->parent = 0ULL;
+            self->obj->self   = 0ULL;
+            self->obj->root   = 0ULL;
 
-        engine::get_lock()--; return -1; }); 
-        engine::get_lock()++; 
+        });
     
     }
 

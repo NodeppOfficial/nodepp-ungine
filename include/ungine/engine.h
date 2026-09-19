@@ -16,8 +16,10 @@
 
 namespace ungine { namespace engine {
 
+    event_t<>      onConstructor;
+    event_t<>      onDestructor ;
+
     event_t<>      onExit ;
-    event_t<>      onFree ;
     event_t<>      onOpen ;
     event_t<>      onNext ;
     event_t<float> onLoop ;
@@ -56,9 +58,7 @@ namespace ungine { namespace engine {
 
 namespace ungine { namespace engine {
 
-    int&   get_lock() /*--*/ { thread_local static int x=0; return x; }
-
-    bool   is_ready() /*--*/ { return rl::IsWindowReady() && get_lock()==0; }
+    bool   is_ready() /*--*/ { return onConstructor.empty() && onDestructor.empty(); }
     bool   should_close()    { return rl::WindowShouldClose(); }
     float  get_delta() /*-*/ { return rl::GetFrameTime(); }
     
@@ -88,23 +88,25 @@ namespace ungine { namespace engine {
         rl::InitAudioDevice();
     //  rl::SetExitKey(0);
 
-        process::NODEPP_SIGNAL().onSIGEXIT([](){ close(); });
-
         process::add( coroutine::add( COROUTINE(){
-        coBegin ; onOpen.emit(); 
+        coBegin; coWait( !rl::IsWindowReady() ); onOpen.emit(); 
             
-            while( !should_close() ){ do {
-            if   ( !is_ready    () ){ onFree.emit(); break; }
-        
-                get_time()+= get_delta()  ;
+            while( !should_close() ){ 
+            do{if( !is_ready    () ){ break; }
+
                 onLoop.emit( get_delta() );
                 onNext.emit( /*-------*/ );
                 onDraw.emit( /*-------*/ );
+                get_time()+= get_delta()  ;
 
-            } while(0); coNext; } close();
+            } while(0); 
+            
+                if  ( !onDestructor .empty() ){ onDestructor .emit(); } 
+                elif( !onConstructor.empty() ){ onConstructor.emit(); }
+            
+            coNext; } close();
 
-        coFinish
-        }));
+        coFinish }));
 
     }
 

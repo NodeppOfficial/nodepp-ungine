@@ -66,13 +66,11 @@ return node::node_rectangle( [=]( ptr_t<node_t> self ){
         do {
 
             auto  mtx = vpt->matrix; 
-            float stm = engine::get_delta()
-                      + matrix::get_pixel_float( mtx, 0, 1, 0 ); 
 
             matrix::set_pixel_float( mtx, 0, 1, 3, window::get_size().x );
             matrix::set_pixel_float( mtx, 0, 1, 2, window::get_size().y );
             matrix::set_pixel_float( mtx, 0, 1, 1, tmp.render[0].depth  );
-            matrix::set_pixel_float( mtx, 0, 1, 0, stm );
+            matrix::set_pixel_float( mtx, 0, 1, 0, engine::get_time ()  );
             matrix::set_pixel_float( mtx, 0, 2, 0, engine::get_delta()  );
 
         } while(0); coGoto(0);
@@ -154,12 +152,12 @@ return node_render([=]( ptr_t<node_t> self ){
     auto mtx = vpt ->matrix;
 
     self->onDraw([=](){
+    rl::rlDisableBackfaceCulling();
       
         draw::begin(); rl::ClearBackground ( vpt->background );
         model::draw( shp->model, *pos, shp->color, shp->mode );
 
         /*
-        blend::begin( blend::MODE::BLEND_MODE_ALPHA );
         rl::DrawTexturePro( vpt->render[0].albedo,
             rect_t({ 0, 0, 
                 (float) vpt->render[0].albedo.width ,
@@ -170,9 +168,9 @@ return node_render([=]( ptr_t<node_t> self ){
                 (float) window::get_size().y,
             }), 
         vec2_t({ 0, 0 }), .0f, rl::WHITE );
-        blend::end();
         */
         
+    rl::rlEnableBackfaceCulling();
     draw::end(); }); clb( self );
  
 }, layers ); }}}
