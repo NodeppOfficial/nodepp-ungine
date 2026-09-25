@@ -94,8 +94,7 @@ public:
     /*─······································································─*/
 
     node_t* append_child( string_t name, const node_t& value ) const noexcept {
-    do{ 
-        if( !exists()         ){ value.free(); break; }
+    do{ if( !exists()         ){ value.free(); break; }
         if( !value.exists()   ){ /*---------*/ break; }
         if( value.obj->parent ){ /*---------*/ break; }
         if( has_child( name ) ){ remove_child (name); }
@@ -130,7 +129,10 @@ public:
     
     /*─······································································─*/
 
-    void remove_child( string_t name ) const noexcept { get_child(name)->free(); }
+    void remove_child( string_t name ) const noexcept { do {
+        if( !has_child( name ) ){ break; } 
+        get_child( name )->free(); 
+    } while(0); }
 
     node_t* get_child( string_t name ) const noexcept {
     do{ if( !has_child( name ) ){ break; }
