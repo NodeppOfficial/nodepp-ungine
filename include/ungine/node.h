@@ -67,7 +67,7 @@ public:
         mem.update( hdl, *this ); obj->self = hdl; obj->root = hdl;
         auto self = mem.read( obj->self );
 
-        engine::onConstructor.once([=](){ cb( self ); });
+        engine::onConstructor.once([=](){ if( self->exists() ){ cb(self); } });
 
         obj->task.push( engine::onLoop.add([=]( float delta ){
         do { if( !self->exists() ){ break; }
